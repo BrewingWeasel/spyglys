@@ -7,7 +7,7 @@ def remove_universal_prefix (universal_prefix + '(?<rest>\w+$)'):
    rest;
 
 def remove_verb_prefix (verb_prefix + root_verb_form + '$'): 
-   stem + "ti" + $if_else(reflexive, "s", "",);
+   stem + "ti" + $map(reflexive, "s");
 
 def unreflexify (root_verb_form + 's$'): 
    stem + "ti";

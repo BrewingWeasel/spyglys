@@ -199,11 +199,11 @@ mod test {
     use crate::interpreter::*;
 
     #[test]
-    fn test_if_else_true() {
+    fn test_if_else_true_from_expression() {
         let interpreter: Interpreter = Default::default();
         let v = interpreter.eval(
             &Expression::Builtin(
-                "if-else".to_owned(),
+                "if_else".to_owned(),
                 vec![
                     Box::new(Expression::String("exists".to_owned())),
                     Box::new(Expression::String("t".to_owned())),
@@ -216,11 +216,11 @@ mod test {
     }
 
     #[test]
-    fn test_if_else_false() {
+    fn test_if_else_false_from_expression() {
         let interpreter: Interpreter = Default::default();
         let v = interpreter.eval(
             &Expression::Builtin(
-                "if-else".to_owned(),
+                "if_else".to_owned(),
                 vec![
                     Box::new(Expression::Empty),
                     Box::new(Expression::String("t".to_owned())),
@@ -233,7 +233,7 @@ mod test {
     }
 
     #[test]
-    fn test_run_function() {
+    fn test_run_function_from_expression() {
         let interpreter: Interpreter = Default::default();
         let v = interpreter.eval_function(
             &Expression::Plus(
@@ -245,7 +245,7 @@ mod test {
                 Box::new(Expression::Plus(
                     Box::new(Expression::String("ti".to_owned())),
                     Box::new(Expression::Builtin(
-                        "if-else".to_owned(),
+                        "if_else".to_owned(),
                         vec![
                             Box::new(Expression::Variable("reflexive".to_owned())),
                             Box::new(Expression::String("s".to_owned())),

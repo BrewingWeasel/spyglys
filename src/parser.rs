@@ -252,6 +252,10 @@ fn parse_partial_expression(
 
 #[cfg(test)]
 mod test {
+    use super::Token;
+
+    use super::parse_expression;
+
     use super::Lexer;
 
     #[test]
@@ -269,5 +273,11 @@ mod test {
             end   let   def end defendletdef"
         )
         .tokenize())
+    }
+
+    #[test]
+    fn test_parsing_function() {
+        let mut tokens = Lexer::new("run_thing('v')").peekable();
+        insta::assert_debug_snapshot!(parse_expression(&mut tokens, Token::Eof))
     }
 }
