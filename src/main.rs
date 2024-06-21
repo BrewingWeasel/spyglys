@@ -1,5 +1,5 @@
 use reedline::{DefaultPrompt, DefaultPromptSegment, Reedline};
-use std::{fs, io::stdin};
+use std::{fs, io::stdin, process::exit};
 
 use spyglys::{
     contents_to_interpreter, formatter::pretty_file, interpreter::Interpreter, parse_string,
@@ -43,7 +43,13 @@ fn main() {
         Commands::Shell { file } => {
             let mut interpreter = if let Some(f) = file {
                 let file_contents = fs::read_to_string(f).unwrap();
-                contents_to_interpreter(&file_contents)
+                match contents_to_interpreter(&file_contents) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("{e}");
+                        exit(1);
+                    }
+                }
             } else {
                 Interpreter::new()
             };
@@ -56,8 +62,10 @@ fn main() {
                 let sig = line_editor.read_line(&prompt);
                 match sig {
                     Ok(reedline::Signal::Success(buffer)) => {
-                        let v = run_input(&buffer, &mut interpreter);
-                        println!("{}", v)
+                        match run_input(&buffer, &mut interpreter) {
+                            Ok(v) => println!("{v}"),
+                            Err(e) => eprintln!("{e}"),
+                        };
                     }
                     Ok(reedline::Signal::CtrlD) | Ok(reedline::Signal::CtrlC) => {
                         println!("Exiting shell");
@@ -69,17 +77,32 @@ fn main() {
         }
         Commands::Run { file } => {
             let file_contents = fs::read_to_string(file).unwrap();
-            let interpreter = contents_to_interpreter(&file_contents);
+            let interpreter = match contents_to_interpreter(&file_contents) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("{e}");
+                    exit(1);
+                }
+            };
+
             loop {
                 let mut input = String::new();
                 stdin().read_line(&mut input).unwrap();
-                let resp = interpreter.run_function("main", &input);
-                println!("{resp}");
+                match interpreter.run_function("main", &input) {
+                    Ok(resp) => println!("{resp}"),
+                    Err(e) => eprintln!("{e}"),
+                }
             }
         }
         Commands::Format { file } => {
             let file_contents = fs::read_to_string(&file).unwrap();
-            let statements = parse_string(&file_contents);
+            let statements = match parse_string(&file_contents) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("{e}");
+                    exit(1);
+                }
+            };
             let formatted = pretty_file(&statements);
             fs::write(format!("{file}.bak"), file_contents).unwrap();
             fs::write(file, formatted).unwrap();

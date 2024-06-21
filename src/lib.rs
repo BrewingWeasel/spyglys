@@ -1,11 +1,57 @@
-use interpreter::{Interpreter, Statement, Value};
-use parser::{Lexer, Token};
+use std::fmt::Display;
+
+use interpreter::{Interpreter, RuntimeError, Statement, Value};
+use parser::{Lexer, LexingError, LexingErrorType, ParsingError, ParsingErrorType, Token};
 
 pub mod formatter;
 pub mod interpreter;
 pub mod parser;
 
-pub fn parse_string(input: &str) -> Vec<Statement> {
+pub enum SpyglysError {
+    Lexing(LexingError),
+    Parsing(ParsingError),
+    Runtime(RuntimeError),
+}
+
+impl Display for SpyglysError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Lexing(LexingError { err_type, position }) => {
+                write!(f, "Lexing error at {position}: ")?;
+                match err_type {
+                    LexingErrorType::UnexpectedEof => write!(f, "Unexpected EOF"),
+                    LexingErrorType::UnexpectedChar(actual) => {
+                        write!(f, "Expected a valid character for an ident; found {actual}")
+                    }
+                }
+            }
+            Self::Parsing(ParsingError {
+                err_type,
+                start,
+                end,
+            }) => {
+                write!(f, "Parsing error at at {start}..{end}: ")?;
+                match err_type {
+                    ParsingErrorType::UnexpectedEOF => write!(f, "Unexpected EOF"),
+                    ParsingErrorType::InvalidExpression => write!(f, "Invalid expression"),
+                    ParsingErrorType::InvalidStatement => write!(f, "Invalid statement"),
+                    ParsingErrorType::ExpectedIdent(g) => write!(
+                        f,
+                        "Expected an identifier for this object; found token `{g}`"
+                    ),
+                    ParsingErrorType::ExpectedToken(wanted, got) => {
+                        write!(f, "Expected token `{wanted}`; got `{got}`")
+                    }
+                }
+            }
+            Self::Runtime(r) => {
+                write!(f, "{r}")
+            }
+        }
+    }
+}
+
+pub fn parse_string(input: &str) -> Result<Vec<Statement>, SpyglysError> {
     let mut lexed = Lexer::new(input).peekable();
 
     let mut statements = Vec::new();
@@ -13,30 +59,43 @@ pub fn parse_string(input: &str) -> Vec<Statement> {
         if t.contents == Token::Eof {
             break;
         }
-        let Some(statement) = parser::parse_statement(&mut lexed) else {
+        let Ok(statement) = parser::parse_statement(&mut lexed) else {
             continue;
         };
         statements.push(statement);
     }
-    statements
+    Ok(statements)
 }
 
-pub fn contents_to_interpreter(input: &str) -> Interpreter {
-    let statements = parse_string(input);
+pub fn contents_to_interpreter(input: &str) -> Result<Interpreter, SpyglysError> {
+    let statements = parse_string(input)?;
     let mut i = Interpreter::new();
-    i.run_statements(statements);
-    i
+    i.run_statements(statements)
+        .map_err(SpyglysError::Runtime)?;
+    Ok(i)
 }
 
-pub fn run_input(input: &str, interpreter: &mut Interpreter) -> Value {
+pub fn run_input(input: &str, interpreter: &mut Interpreter) -> Result<Value, SpyglysError> {
     let mut lexed = Lexer::new(input).peekable();
 
-    if let Some(expr) = parser::parse_expression(&mut lexed, Token::Eof) {
-        let resp = interpreter.eval(&expr, None);
-        return resp;
+    match parser::parse_expression(&mut lexed, Token::Eof) {
+        Ok(expr) => {
+            let resp = interpreter.eval(&expr, None);
+            return resp.map_err(SpyglysError::Runtime);
+        }
+        Err(e) => {
+            if e.err_type != ParsingErrorType::InvalidExpression {
+                return Err(SpyglysError::Parsing(e));
+            }
+        }
     }
-    if let Some(statement) = parser::parse_statement(&mut lexed) {
-        interpreter.run_statements(vec![statement]);
-    };
-    Value::Empty
+    match parser::parse_statement(&mut lexed) {
+        Ok(statement) => {
+            interpreter
+                .run_statements(vec![statement])
+                .map_err(SpyglysError::Runtime)?;
+            Ok(Value::Empty)
+        }
+        Err(e) => Err(SpyglysError::Parsing(e)),
+    }
 }

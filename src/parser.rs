@@ -49,10 +49,23 @@ impl Display for Token {
 }
 
 #[derive(Debug, Clone)]
+pub struct LexingError {
+    pub err_type: LexingErrorType,
+    pub position: usize,
+}
+
+#[derive(Debug, Clone)]
+pub enum LexingErrorType {
+    UnexpectedEof,
+    UnexpectedChar(char),
+}
+
+#[derive(Debug, Clone)]
 pub struct Lexer<'input> {
     chars: Peekable<Chars<'input>>,
     position: usize,
     eof: bool,
+    pub errors: Vec<LexingError>,
 }
 
 impl<'input> Lexer<'input> {
@@ -61,6 +74,7 @@ impl<'input> Lexer<'input> {
             chars: input.chars().peekable(),
             position: 0,
             eof: false,
+            errors: Vec::new(),
         }
     }
 
@@ -75,6 +89,12 @@ impl<'input> Lexer<'input> {
 
     fn assert_next_char(&mut self) -> Option<char> {
         self.position += 1;
+        if self.chars.peek().is_none() {
+            self.errors.push(LexingError {
+                err_type: LexingErrorType::UnexpectedEof,
+                position: self.position,
+            })
+        }
         self.chars.next()
     }
 
@@ -134,7 +154,14 @@ impl<'input> Iterator for Lexer<'input> {
             c => {
                 let mut conts = String::from(c);
                 while let Some(c) = self.peek_char() {
+                    if c.is_whitespace() {
+                        break;
+                    }
                     if !c.is_alphanumeric() && c != '_' && c != '?' {
+                        self.errors.push(LexingError {
+                            err_type: LexingErrorType::UnexpectedChar(c),
+                            position: self.position + 1,
+                        });
                         break;
                     }
                     self.next_char();
@@ -155,83 +182,196 @@ impl<'input> Iterator for Lexer<'input> {
     }
 }
 
-pub fn parse_statement(tokens: &mut Peekable<Lexer>) -> Option<Statement> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParsingErrorType {
+    UnexpectedEOF,
+    ExpectedIdent(Token),
+    ExpectedToken(Token, Token),
+    InvalidStatement,
+    InvalidExpression,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParsingError {
+    pub err_type: ParsingErrorType,
+    pub start: usize,
+    pub end: usize,
+}
+
+pub fn parse_statement(tokens: &mut Peekable<Lexer>) -> Result<Statement, ParsingError> {
     if let Some(t) = tokens.next() {
         match t.contents {
             Token::Let => {
                 let Some(ident) = tokens.next() else {
-                    todo!();
-                    return None;
+                    return Err(ParsingError {
+                        err_type: ParsingErrorType::UnexpectedEOF,
+                        start: t.end,
+                        end: t.end,
+                    });
                 };
                 let Token::Ident(var_name) = ident.contents else {
-                    return None;
+                    return Err(ParsingError {
+                        err_type: ParsingErrorType::ExpectedIdent(ident.contents),
+                        start: ident.start,
+                        end: ident.end,
+                    });
                 };
-                tokens.next();
+                let Some(t) = tokens.next() else {
+                    return Err(ParsingError {
+                        err_type: ParsingErrorType::UnexpectedEOF,
+                        start: ident.end,
+                        end: ident.end,
+                    });
+                };
+                if t.contents != Token::Equals {
+                    return Err(ParsingError {
+                        err_type: ParsingErrorType::ExpectedToken(Token::Equals, t.contents),
+                        start: t.start,
+                        end: t.end,
+                    });
+                }
                 let value = parse_expression(tokens, Token::Semicolon)?;
-                Some(Statement::Let(var_name, value))
+                tokens.next();
+                Ok(Statement::Let(var_name, value))
             }
             Token::Def => {
+                // func
                 let Some(ident) = tokens.next() else {
-                    todo!();
-                    return None;
+                    return Err(ParsingError {
+                        err_type: ParsingErrorType::UnexpectedEOF,
+                        start: t.end,
+                        end: t.end,
+                    });
                 };
                 let Token::Ident(func_name) = ident.contents else {
-                    return None;
+                    return Err(ParsingError {
+                        err_type: ParsingErrorType::ExpectedIdent(ident.contents),
+                        start: ident.start,
+                        end: ident.end,
+                    });
                 };
-                tokens.next();
+
+                // (
+                let Some(t) = tokens.next() else {
+                    return Err(ParsingError {
+                        err_type: ParsingErrorType::UnexpectedEOF,
+                        start: ident.end,
+                        end: ident.end,
+                    });
+                };
+                if t.contents != Token::LParen {
+                    return Err(ParsingError {
+                        err_type: ParsingErrorType::ExpectedToken(Token::LParen, t.contents),
+                        start: t.start,
+                        end: t.end,
+                    });
+                }
+
                 let matching = parse_expression(tokens, Token::RParen)?;
+
+                // )
                 tokens.next();
                 let handler = parse_expression(tokens, Token::Semicolon)?;
-                Some(Statement::Def(func_name, matching, handler))
+                tokens.next();
+                Ok(Statement::Def(func_name, matching, handler))
             }
-            _ => None,
+            _ => Err(ParsingError {
+                err_type: ParsingErrorType::InvalidStatement,
+                start: t.start,
+                end: t.end,
+            }),
         }
     } else {
-        None
+        Err(ParsingError {
+            err_type: ParsingErrorType::InvalidStatement,
+            start: 0,
+            end: 0,
+        })
     }
 }
 
-pub fn parse_expression(tokens: &mut Peekable<Lexer>, ending: Token) -> Option<Expression> {
+pub fn parse_expression(
+    tokens: &mut Peekable<Lexer>,
+    ending: Token,
+) -> Result<Expression, ParsingError> {
     let mut previous = None;
     while let Some(t) = tokens.peek() {
         if t.contents == ending {
             break;
         }
-        let new_expr = parse_partial_expression(tokens, previous);
-        previous = new_expr
+        let new_expr = parse_partial_expression(tokens, previous)?;
+        previous = Some(new_expr);
     }
-    previous
+    previous.ok_or(ParsingError {
+        err_type: ParsingErrorType::InvalidExpression,
+        start: 0,
+        end: 0,
+    })
 }
 
 fn parse_partial_expression(
     tokens: &mut Peekable<Lexer>,
     previous: Option<Expression>,
-) -> Option<Expression> {
+) -> Result<Expression, ParsingError> {
     if let Some(t) = tokens.next() {
         match t.contents {
-            Token::Regex(r) => Some(Expression::Regex(r)),
-            Token::Str(s) => Some(Expression::String(s)),
+            Token::Regex(r) => Ok(Expression::Regex(r)),
+            Token::Str(s) => Ok(Expression::String(s)),
             Token::Ident(name) => {
                 if let Some(t) = tokens.peek() {
                     if t.contents == Token::LParen {
                         tokens.next();
                         let inner = parse_expression(tokens, Token::RParen)?;
                         tokens.next();
-                        return Some(Expression::Call(name, Box::new(inner)));
+                        return Ok(Expression::Call(name, Box::new(inner)));
                     }
                 }
-                Some(Expression::Variable(name))
+                Ok(Expression::Variable(name))
             }
             Token::Plus => {
-                let next = parse_partial_expression(tokens, previous.clone());
-                Some(Expression::Plus(Box::new(previous?), Box::new(next?)))
+                let next = parse_partial_expression(tokens, previous.clone())?;
+                Ok(Expression::Plus(
+                    Box::new(previous.ok_or(ParsingError {
+                        err_type: ParsingErrorType::InvalidExpression,
+                        start: 0,
+                        end: 0,
+                    })?),
+                    Box::new(next),
+                ))
             }
             Token::Dollars => {
-                let Some(ident) = tokens.next() else { todo!() };
-                let Token::Ident(name) = ident.contents else {
-                    todo!()
+                // ident
+                let Some(ident) = tokens.next() else {
+                    return Err(ParsingError {
+                        err_type: ParsingErrorType::UnexpectedEOF,
+                        start: t.end,
+                        end: t.end,
+                    });
                 };
-                tokens.next();
+                let Token::Ident(name) = ident.contents else {
+                    return Err(ParsingError {
+                        err_type: ParsingErrorType::ExpectedIdent(ident.contents),
+                        start: ident.start,
+                        end: ident.end,
+                    });
+                };
+
+                // (
+                let Some(t) = tokens.next() else {
+                    return Err(ParsingError {
+                        err_type: ParsingErrorType::UnexpectedEOF,
+                        start: ident.end,
+                        end: ident.end,
+                    });
+                };
+                if t.contents != Token::LParen {
+                    return Err(ParsingError {
+                        err_type: ParsingErrorType::ExpectedToken(Token::LParen, t.contents),
+                        start: t.start,
+                        end: t.end,
+                    });
+                }
+
                 let mut contents = Vec::new();
                 while let Some(t) = tokens.peek() {
                     if t.contents == Token::RParen {
@@ -241,12 +381,20 @@ fn parse_partial_expression(
                     contents.push(Box::new(parse_expression(tokens, Token::Comma)?));
                     tokens.next();
                 }
-                Some(Expression::Builtin(name, contents))
+                Ok(Expression::Builtin(name, contents))
             }
-            _ => None,
+            _ => Err(ParsingError {
+                err_type: ParsingErrorType::InvalidExpression,
+                start: t.start,
+                end: t.end,
+            }),
         }
     } else {
-        None
+        Err(ParsingError {
+            err_type: ParsingErrorType::InvalidExpression,
+            start: 0,
+            end: 0,
+        })
     }
 }
 

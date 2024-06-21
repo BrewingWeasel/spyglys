@@ -36,6 +36,23 @@ impl Display for Value {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Type {
+    Str,
+    Regex,
+    Empty,
+}
+
+impl From<Value> for Type {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::Empty => Type::Empty,
+            Value::Regex(_) => Type::Regex,
+            Value::Str(_) => Type::Str,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct Interpreter {
     scope: Scope,
@@ -47,87 +64,178 @@ pub struct Scope {
     functions: HashMap<String, (Expression, Expression)>,
 }
 
-impl Interpreter {
-    pub fn eval(&self, expr: &Expression, additional: Option<&[Scope]>) -> Value {
-        match expr {
-            Expression::Plus(v1, v2) => {
-                let evaled = (self.eval(v1, additional), self.eval(v2, additional));
-                match evaled {
-                    (Value::Str(mut s1), Value::Str(s2)) => {
-                        s1.push_str(&s2);
-                        Value::Str(s1)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RuntimeErrorType {
+    TypeError(TypeErrorType),
+    NonExistentVariable(String),
+    WrongNumberOfArgs(usize, usize),
+    NonExistentBuiltin(String),
+    NonExistentFunction(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeErrorType {
+    Adding(Type, Type),
+    ExpectedType(Type, Value),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RuntimeError {
+    pub when_evaluating: Expression,
+    pub error_type: RuntimeErrorType,
+}
+
+impl Display for RuntimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut expr = Vec::new();
+        self.when_evaluating.to_doc().render(80, &mut expr).unwrap();
+        write!(
+            f,
+            "Runtime error while evaluating `{}`: ",
+            String::from_utf8(expr).unwrap()
+        )?;
+        match &self.error_type {
+            RuntimeErrorType::TypeError(t) => {
+                write!(f, "(type error) ")?;
+                match t {
+                    TypeErrorType::Adding(t1, t2) => {
+                        write!(f, "Cannot add types {:?} and {:?}", t1, t2)
                     }
-                    (Value::Regex(mut r1), Value::Regex(r2)) => {
-                        r1.push_str(&r2);
-                        Value::Regex(r1)
-                    }
-                    _ => {
-                        println!("{:?} {:?}", v1, v2);
-                        println!("{:?}", evaled);
-                        todo!()
+                    TypeErrorType::ExpectedType(t, got) => {
+                        write!(
+                            f,
+                            "Expected type {:?}; got {:?} (type {:?})",
+                            t,
+                            got,
+                            std::convert::Into::<Type>::into(got.clone())
+                        )
                     }
                 }
             }
-            Expression::Regex(r) => Value::Regex((*r).to_owned()),
-            Expression::String(s) => Value::Str((*s).to_owned()),
+            RuntimeErrorType::WrongNumberOfArgs(expected, got) => write!(
+                f,
+                "Incorrect number of arguments; expected {expected}, got {got}"
+            ),
+            RuntimeErrorType::NonExistentBuiltin(builtin) => {
+                write!(f, "Builtin {builtin} does not exist")
+            }
+            RuntimeErrorType::NonExistentFunction(function) => {
+                write!(f, "Function {function} does not exist")
+            }
+            RuntimeErrorType::NonExistentVariable(variable) => {
+                write!(f, "Variable {variable} does not exist")
+            }
+        }
+    }
+}
+
+impl Interpreter {
+    pub fn eval(
+        &self,
+        expr: &Expression,
+        additional: Option<&[Scope]>,
+    ) -> Result<Value, RuntimeError> {
+        match expr {
+            Expression::Plus(e1, e2) => {
+                let evaled = (self.eval(e1, additional)?, self.eval(e2, additional)?);
+                match evaled {
+                    (Value::Str(mut s1), Value::Str(s2)) => {
+                        s1.push_str(&s2);
+                        Ok(Value::Str(s1))
+                    }
+                    (Value::Regex(mut r1), Value::Regex(r2)) => {
+                        r1.push_str(&r2);
+                        Ok(Value::Regex(r1))
+                    }
+                    (v1, v2) => Err(RuntimeError {
+                        when_evaluating: expr.clone(),
+                        error_type: RuntimeErrorType::TypeError(TypeErrorType::Adding(
+                            v1.into(),
+                            v2.into(),
+                        )),
+                    }),
+                }
+            }
+            Expression::Regex(r) => Ok(Value::Regex((*r).to_owned())),
+            Expression::String(s) => Ok(Value::Str((*s).to_owned())),
             Expression::Variable(var) => {
                 if let Some(scopes) = additional {
                     for scope in scopes.iter().rev() {
                         if let Some(v) = scope.variables.get(var.as_str()) {
-                            return v.clone();
+                            return Ok(v.clone());
                         }
                     }
                 }
                 if let Some(v) = self.scope.variables.get(var.as_str()) {
-                    return v.clone();
+                    return Ok(v.clone());
                 }
-                println!("{:?} {:?}", var, self.scope.variables);
-                todo!();
+                Err(RuntimeError {
+                    when_evaluating: expr.clone(),
+                    error_type: RuntimeErrorType::NonExistentVariable(var.to_owned()),
+                })
             }
-            Expression::Empty => Value::Empty,
+            Expression::Empty => Ok(Value::Empty),
             Expression::Call(func, expr) => {
-                let Value::Str(input) = self.eval(expr, additional) else {
-                    todo!()
-                };
-                Value::Str(self.run_function(func, &input))
+                let call_value = self.eval(expr, additional)?;
+                if let Value::Str(input) = call_value {
+                    Ok(Value::Str(self.run_function(func, &input)?))
+                } else {
+                    Err(RuntimeError {
+                        when_evaluating: *expr.clone(),
+                        error_type: RuntimeErrorType::TypeError(TypeErrorType::ExpectedType(
+                            Type::Str,
+                            call_value,
+                        )),
+                    })
+                }
             }
             Expression::Builtin(func, exprs) => {
-                let values: Vec<Value> = exprs
+                let values: Result<Vec<Value>, RuntimeError> = exprs
                     .iter()
                     .map(|expr| self.eval(expr, additional))
                     .collect();
+                let values = values?;
                 match func.as_str() {
                     "if_else" => {
                         if values.len() != 3 {
-                            todo!();
-                        }
-                        if values[0] != Value::Empty {
-                            values[1].clone()
+                            Err(RuntimeError {
+                                when_evaluating: expr.clone(),
+                                error_type: RuntimeErrorType::WrongNumberOfArgs(values.len(), 3),
+                            })
+                        } else if values[0] != Value::Empty {
+                            Ok(values[1].clone())
                         } else {
-                            values[2].clone()
+                            Ok(values[2].clone())
                         }
                     }
                     "map" => {
                         if values.len() != 2 {
-                            todo!();
-                        }
-                        if values[0] != Value::Empty {
-                            values[1].clone()
+                            Err(RuntimeError {
+                                when_evaluating: expr.clone(),
+                                error_type: RuntimeErrorType::WrongNumberOfArgs(values.len(), 2),
+                            })
+                        } else if values[0] != Value::Empty {
+                            Ok(values[1].clone())
                         } else {
-                            Value::Empty
+                            Ok(Value::Empty)
                         }
                     }
                     "unwrap_empty" => {
                         if values.len() != 2 {
-                            todo!();
-                        }
-                        if values[0] == Value::Empty {
-                            values[1].clone()
+                            Err(RuntimeError {
+                                when_evaluating: expr.clone(),
+                                error_type: RuntimeErrorType::WrongNumberOfArgs(values.len(), 2),
+                            })
+                        } else if values[0] == Value::Empty {
+                            Ok(values[1].clone())
                         } else {
-                            values[0].clone()
+                            Ok(values[0].clone())
                         }
                     }
-                    _ => todo!(),
+                    v => Err(RuntimeError {
+                        when_evaluating: expr.clone(),
+                        error_type: RuntimeErrorType::NonExistentBuiltin(v.to_owned()),
+                    }),
                 }
             }
         }
@@ -139,11 +247,11 @@ impl Interpreter {
         }
     }
 
-    pub fn run_statements(&mut self, statements: Vec<Statement>) {
+    pub fn run_statements(&mut self, statements: Vec<Statement>) -> Result<(), RuntimeError> {
         for statement in statements {
             match statement {
                 Statement::Let(var, value) => {
-                    let v = self.eval(&value, None);
+                    let v = self.eval(&value, None)?;
                     self.scope.variables.insert(var.to_owned(), v);
                 }
                 Statement::Def(func_name, pattern, handler) => {
@@ -151,21 +259,40 @@ impl Interpreter {
                 }
             }
         }
+        Ok(())
     }
 
-    pub fn run_function(&self, function: &str, input: &str) -> String {
+    pub fn run_function(&self, function: &str, input: &str) -> Result<String, RuntimeError> {
         if let Some((matcher, handler)) = self.scope.functions.get(function) {
             self.eval_function(matcher, handler, input)
         } else {
-            println!("{:?} {:?}", function, self.scope.functions);
-            todo!()
+            Err(RuntimeError {
+                when_evaluating: Expression::Call(
+                    function.to_owned(),
+                    Box::new(Expression::String(input.to_owned())),
+                ),
+                error_type: RuntimeErrorType::NonExistentFunction(function.to_owned()),
+            })
         }
     }
 
-    fn eval_function(&self, matcher: &Expression, handler: &Expression, input: &str) -> String {
-        let Value::Regex(regex_matching) = self.eval(matcher, None) else {
-            todo!()
+    fn eval_function(
+        &self,
+        matcher: &Expression,
+        handler: &Expression,
+        input: &str,
+    ) -> Result<String, RuntimeError> {
+        let matched = self.eval(matcher, None)?;
+        let Value::Regex(regex_matching) = matched else {
+            return Err(RuntimeError {
+                when_evaluating: matcher.clone(),
+                error_type: RuntimeErrorType::TypeError(TypeErrorType::ExpectedType(
+                    Type::Regex,
+                    matched,
+                )),
+            });
         };
+
         let re = Regex::new(&regex_matching).unwrap();
         let captures = re.captures(input).unwrap();
         let mut variables = HashMap::new();
@@ -180,16 +307,25 @@ impl Interpreter {
                     .map_or(Value::Empty, |v| Value::Str(v.as_str().to_string())),
             );
         }
-        if let Value::Str(r) = self.eval(
+
+        let handled = self.eval(
             handler,
             Some(&[Scope {
                 variables,
                 ..Default::default()
             }]),
-        ) {
-            r
+        )?;
+
+        if let Value::Str(r) = handled {
+            Ok(r)
         } else {
-            todo!();
+            Err(RuntimeError {
+                when_evaluating: matcher.clone(),
+                error_type: RuntimeErrorType::TypeError(TypeErrorType::ExpectedType(
+                    Type::Str,
+                    handled,
+                )),
+            })
         }
     }
 }
@@ -212,7 +348,7 @@ mod test {
             ),
             None,
         );
-        assert_eq!(v, Value::Str("t".to_owned()));
+        assert_eq!(v, Ok(Value::Str("t".to_owned())));
     }
 
     #[test]
@@ -229,7 +365,7 @@ mod test {
             ),
             None,
         );
-        assert_eq!(v, Value::Str("f".to_owned()));
+        assert_eq!(v, Ok(Value::Str("f".to_owned())));
     }
 
     #[test]
@@ -256,6 +392,6 @@ mod test {
             ),
             "persikelti",
         );
-        assert_eq!(v, "keltis");
+        assert_eq!(v, Ok("keltis".to_owned()));
     }
 }
