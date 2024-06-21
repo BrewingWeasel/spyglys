@@ -127,10 +127,11 @@ impl<'input> Iterator for Lexer<'input> {
             }
             c => {
                 let mut conts = String::from(c);
-                while let Some(c) = self.assert_next_char() {
+                while let Some(c) = self.peek_char() {
                     if !c.is_alphanumeric() && c != '_' && c != '?' {
                         break;
                     }
+                    self.next_char();
                     conts.push(c);
                 }
                 match conts.as_str() {
@@ -202,9 +203,19 @@ fn parse_partial_expression(
 ) -> Option<Expression> {
     if let Some(t) = tokens.next() {
         match t.contents {
-            Token::Ident(i) => Some(Expression::Variable(i)),
             Token::Regex(r) => Some(Expression::Regex(r)),
             Token::Str(s) => Some(Expression::String(s)),
+            Token::Ident(name) => {
+                if let Some(t) = tokens.peek() {
+                    if t.contents == Token::LParen {
+                        tokens.next();
+                        let inner = parse_expression(tokens, Token::RParen)?;
+                        tokens.next();
+                        return Some(Expression::Call(name, Box::new(inner)));
+                    }
+                }
+                Some(Expression::Variable(name))
+            }
             Token::Plus => {
                 let next = parse_partial_expression(tokens, previous.clone());
                 Some(Expression::Plus(Box::new(previous?), Box::new(next?)))

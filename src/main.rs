@@ -36,10 +36,10 @@ fn main() {
             match sig {
                 Ok(reedline::Signal::Success(buffer)) => {
                     let v = run_input(&buffer, &mut interpreter);
-                    println!("\n{}", v)
+                    println!("{}", v)
                 }
                 Ok(reedline::Signal::CtrlD) | Ok(reedline::Signal::CtrlC) => {
-                    println!("\nExiting shell");
+                    println!("Exiting shell");
                     break;
                 }
                 _ => {}

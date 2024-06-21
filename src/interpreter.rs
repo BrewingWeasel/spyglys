@@ -10,6 +10,7 @@ pub enum Expression {
     Plus(Box<Expression>, Box<Expression>),
     Ternary(Box<Expression>, Box<Expression>, Box<Expression>),
     Empty,
+    Call(String, Box<Expression>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,6 +93,12 @@ impl Interpreter {
                 todo!();
             }
             Expression::Empty => Value::Empty,
+            Expression::Call(func, expr) => {
+                let Value::Str(input) = self.eval(expr, additional) else {
+                    todo!()
+                };
+                Value::Str(self.run_function(func, &input))
+            }
         }
     }
 
