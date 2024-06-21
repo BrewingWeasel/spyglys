@@ -1,48 +1,53 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use regex::Regex;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Expression<'a> {
-    Regex(&'a str),
-    String(&'a str),
-    Variable(&'a str),
-    Plus(Box<Expression<'a>>, Box<Expression<'a>>),
-    Ternary(
-        Box<Expression<'a>>,
-        Box<Expression<'a>>,
-        Box<Expression<'a>>,
-    ),
+pub enum Expression {
+    Regex(String),
+    String(String),
+    Variable(String),
+    Plus(Box<Expression>, Box<Expression>),
+    Ternary(Box<Expression>, Box<Expression>, Box<Expression>),
     Empty,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Statement<'a> {
-    Let(&'a str, Expression<'a>),
-    Def(&'a str, Expression<'a>, Expression<'a>),
+pub enum Statement {
+    Let(String, Expression),
+    Def(String, Expression, Expression),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Value {
+pub enum Value {
     Str(String),
     Regex(String),
     Empty,
 }
 
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Empty => write!(f, "()"),
+            Self::Regex(r) => write!(f, "'{}'", r),
+            Self::Str(s) => write!(f, "\"{}\"", s),
+        }
+    }
+}
+
 #[derive(Default)]
-struct Interpreter<'a> {
-    scope: Scope<'a>,
-    statements: Vec<Statement<'a>>,
+pub struct Interpreter {
+    scope: Scope,
 }
 
 #[derive(Debug, Clone, Default)]
-struct Scope<'a> {
-    variables: HashMap<&'a str, Value>,
-    functions: HashMap<&'a str, (&'a Expression<'a>, &'a Expression<'a>)>,
+pub struct Scope {
+    variables: HashMap<String, Value>,
+    functions: HashMap<String, (Expression, Expression)>,
 }
 
-impl<'a> Interpreter<'a> {
-    fn eval(&self, expr: &Expression, additional: Option<&[Scope]>) -> Value {
+impl Interpreter {
+    pub fn eval(&self, expr: &Expression, additional: Option<&[Scope]>) -> Value {
         match expr {
             Expression::Plus(v1, v2) => {
                 let evaled = (self.eval(v1, additional), self.eval(v2, additional));
@@ -55,11 +60,15 @@ impl<'a> Interpreter<'a> {
                         r1.push_str(&r2);
                         Value::Regex(r1)
                     }
-                    _ => todo!(),
+                    _ => {
+                        println!("{:?} {:?}", v1, v2);
+                        println!("{:?}", evaled);
+                        todo!()
+                    }
                 }
             }
             Expression::Ternary(cond, v1, v2) => {
-                let option = self.eval(cond, additional.clone());
+                let option = self.eval(cond, additional);
                 if option != Value::Empty {
                     self.eval(v1, additional)
                 } else {
@@ -71,33 +80,33 @@ impl<'a> Interpreter<'a> {
             Expression::Variable(var) => {
                 if let Some(scopes) = additional {
                     for scope in scopes.iter().rev() {
-                        if let Some(v) = scope.variables.get(var) {
+                        if let Some(v) = scope.variables.get(var.as_str()) {
                             return v.clone();
                         }
                     }
                 }
-                if let Some(v) = self.scope.variables.get(var) {
+                if let Some(v) = self.scope.variables.get(var.as_str()) {
                     return v.clone();
                 }
+                println!("{:?} {:?}", var, self.scope.variables);
                 todo!();
             }
             Expression::Empty => Value::Empty,
         }
     }
 
-    fn new_from_statements(statements: Vec<Statement<'a>>) -> Self {
+    pub fn new() -> Self {
         Self {
             scope: Default::default(),
-            statements,
         }
     }
 
-    fn prepare_statements(&'a mut self) {
-        for statement in &self.statements {
+    pub fn run_statements(&mut self, statements: Vec<Statement>) {
+        for statement in statements {
             match statement {
                 Statement::Let(var, value) => {
-                    let v = self.eval(value, None);
-                    self.scope.variables.insert(var, v);
+                    let v = self.eval(&value, None);
+                    self.scope.variables.insert(var.to_owned(), v);
                 }
                 Statement::Def(func_name, pattern, handler) => {
                     self.scope.functions.insert(func_name, (pattern, handler));
@@ -110,6 +119,7 @@ impl<'a> Interpreter<'a> {
         if let Some((matcher, handler)) = self.scope.functions.get(function) {
             self.eval_function(matcher, handler, input)
         } else {
+            println!("{:?} {:?}", function, self.scope.functions);
             todo!()
         }
     }
@@ -126,7 +136,7 @@ impl<'a> Interpreter<'a> {
                 continue;
             };
             variables.insert(
-                var_name,
+                var_name.to_owned(),
                 captures
                     .name(var_name)
                     .map_or(Value::Empty, |v| Value::Str(v.as_str().to_string())),
@@ -155,9 +165,9 @@ mod test {
         let interpreter: Interpreter = Default::default();
         let v = interpreter.eval(
             &Expression::Ternary(
-                Box::new(Expression::String("exists")),
-                Box::new(Expression::String("t")),
-                Box::new(Expression::String("f")),
+                Box::new(Expression::String("exists".to_owned())),
+                Box::new(Expression::String("t".to_owned())),
+                Box::new(Expression::String("f".to_owned())),
             ),
             None,
         );
@@ -170,8 +180,8 @@ mod test {
         let v = interpreter.eval(
             &Expression::Ternary(
                 Box::new(Expression::Empty),
-                Box::new(Expression::String("t")),
-                Box::new(Expression::String("f")),
+                Box::new(Expression::String("t".to_owned())),
+                Box::new(Expression::String("f".to_owned())),
             ),
             None,
         );
@@ -183,17 +193,17 @@ mod test {
         let interpreter: Interpreter = Default::default();
         let v = interpreter.eval_function(
             &Expression::Plus(
-                Box::new(Expression::Regex("^per(?<reflexive>si)")),
-                Box::new(Expression::Regex("(?<stem>\\w*)ti$")),
+                Box::new(Expression::Regex("^per(?<reflexive>si)".to_owned())),
+                Box::new(Expression::Regex("(?<stem>\\w*)ti$".to_owned())),
             ),
             &Expression::Plus(
-                Box::new(Expression::Variable("stem")),
+                Box::new(Expression::Variable("stem".to_owned())),
                 Box::new(Expression::Plus(
-                    Box::new(Expression::String("ti")),
+                    Box::new(Expression::String("ti".to_owned())),
                     Box::new(Expression::Ternary(
-                        Box::new(Expression::Variable("reflexive")),
-                        Box::new(Expression::String("s")),
-                        Box::new(Expression::String("")),
+                        Box::new(Expression::Variable("reflexive".to_owned())),
+                        Box::new(Expression::String("s".to_owned())),
+                        Box::new(Expression::String("".to_owned())),
                     )),
                 )),
             ),

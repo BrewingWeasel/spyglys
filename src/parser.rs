@@ -1,12 +1,12 @@
 use std::{fmt::Display, iter::Peekable, str::Chars};
 
-use crate::interpreter::Expression;
+use crate::interpreter::{Expression, Statement};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Spanned<T> {
-    start: usize,
-    end: usize,
-    contents: T,
+    pub start: usize,
+    pub end: usize,
+    pub contents: T,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,8 +21,8 @@ pub enum Token {
     Ident(String),
     Def,
     Let,
-    End,
     Equals,
+    Semicolon,
 }
 
 impl Display for Token {
@@ -33,13 +33,13 @@ impl Display for Token {
             Token::RParen => write!(f, ")"),
             Token::Plus => write!(f, "+"),
             Token::Equals => write!(f, "="),
+            Token::Semicolon => write!(f, ";"),
             Token::QuestionMark => write!(f, "?"),
             Token::Regex(s) => write!(f, "'{s}'"),
             Token::Str(s) => write!(f, "\"{s}\""),
             Token::Ident(s) => write!(f, "{s}"),
             Token::Def => write!(f, "def"),
             Token::Let => write!(f, "let"),
-            Token::End => write!(f, "end"),
         }
     }
 }
@@ -110,6 +110,7 @@ impl<'input> Iterator for Lexer<'input> {
             '+' => Token::Plus,
             '?' => Token::QuestionMark,
             '=' => Token::Equals,
+            ';' => Token::Semicolon,
             d if d == '\'' || d == '"' => {
                 let mut conts = String::new();
                 while let Some(c) = self.assert_next_char() {
@@ -127,14 +128,13 @@ impl<'input> Iterator for Lexer<'input> {
             c => {
                 let mut conts = String::from(c);
                 while let Some(c) = self.assert_next_char() {
-                    if !c.is_alphanumeric() {
+                    if !c.is_alphanumeric() && c != '_' && c != '?' {
                         break;
                     }
                     conts.push(c);
                 }
                 match conts.as_str() {
                     "def" => Token::Def,
-                    "end" => Token::End,
                     "let" => Token::Let,
                     _ => Token::Ident(conts),
                 }
@@ -145,6 +145,74 @@ impl<'input> Iterator for Lexer<'input> {
             end: self.position,
             contents: token,
         })
+    }
+}
+
+pub fn parse_statement(tokens: &mut Peekable<Lexer>) -> Option<Statement> {
+    if let Some(t) = tokens.next() {
+        match t.contents {
+            Token::Let => {
+                let Some(ident) = tokens.next() else {
+                    todo!();
+                    return None;
+                };
+                let Token::Ident(var_name) = ident.contents else {
+                    return None;
+                };
+                tokens.next();
+                let value = parse_expression(tokens, Token::Semicolon)?;
+                Some(Statement::Let(var_name, value))
+            }
+            Token::Def => {
+                let Some(ident) = tokens.next() else {
+                    todo!();
+                    return None;
+                };
+                let Token::Ident(func_name) = ident.contents else {
+                    return None;
+                };
+                tokens.next();
+                let matching = parse_expression(tokens, Token::RParen)?;
+                tokens.next();
+                let handler = parse_expression(tokens, Token::Semicolon)?;
+                Some(Statement::Def(func_name, matching, handler))
+            }
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
+pub fn parse_expression(tokens: &mut Peekable<Lexer>, ending: Token) -> Option<Expression> {
+    let mut previous = None;
+    while let Some(t) = tokens.peek() {
+        if t.contents == ending {
+            break;
+        }
+        let new_expr = parse_partial_expression(tokens, previous);
+        previous = new_expr
+    }
+    previous
+}
+
+fn parse_partial_expression(
+    tokens: &mut Peekable<Lexer>,
+    previous: Option<Expression>,
+) -> Option<Expression> {
+    if let Some(t) = tokens.next() {
+        match t.contents {
+            Token::Ident(i) => Some(Expression::Variable(i)),
+            Token::Regex(r) => Some(Expression::Regex(r)),
+            Token::Str(s) => Some(Expression::String(s)),
+            Token::Plus => {
+                let next = parse_partial_expression(tokens, previous.clone());
+                Some(Expression::Plus(Box::new(previous?), Box::new(next?)))
+            }
+            _ => None,
+        }
+    } else {
+        None
     }
 }
 
