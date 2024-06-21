@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use regex::Regex;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Expression<'a> {
+pub enum Expression<'a> {
     Regex(&'a str),
     String(&'a str),
     Variable(&'a str),
@@ -17,7 +17,7 @@ enum Expression<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Statement<'a> {
+pub enum Statement<'a> {
     Let(&'a str, Expression<'a>),
     Def(&'a str, Expression<'a>, Expression<'a>),
 }

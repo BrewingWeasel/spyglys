@@ -1,0 +1,36 @@
+---
+source: src/parser.rs
+expression: "Lexer::new(\"let  (+)?\").tokenize()"
+---
+[
+    Spanned {
+        start: 0,
+        end: 4,
+        contents: Let,
+    },
+    Spanned {
+        start: 5,
+        end: 6,
+        contents: LParen,
+    },
+    Spanned {
+        start: 6,
+        end: 7,
+        contents: Plus,
+    },
+    Spanned {
+        start: 7,
+        end: 8,
+        contents: RParen,
+    },
+    Spanned {
+        start: 8,
+        end: 9,
+        contents: QuestionMark,
+    },
+    Spanned {
+        start: 9,
+        end: 9,
+        contents: Eof,
+    },
+]

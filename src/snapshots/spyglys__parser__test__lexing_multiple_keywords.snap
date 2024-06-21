@@ -1,0 +1,48 @@
+---
+source: src/parser.rs
+expression: "Lexer::new(\"let\n\n    def   \n\n            end   let   def end defendletdef\").tokenize()"
+---
+[
+    Spanned {
+        start: 0,
+        end: 4,
+        contents: Let,
+    },
+    Spanned {
+        start: 9,
+        end: 13,
+        contents: Def,
+    },
+    Spanned {
+        start: 29,
+        end: 33,
+        contents: End,
+    },
+    Spanned {
+        start: 35,
+        end: 39,
+        contents: Let,
+    },
+    Spanned {
+        start: 41,
+        end: 45,
+        contents: Def,
+    },
+    Spanned {
+        start: 45,
+        end: 49,
+        contents: End,
+    },
+    Spanned {
+        start: 49,
+        end: 62,
+        contents: Ident(
+            "defendletdef",
+        ),
+    },
+    Spanned {
+        start: 62,
+        end: 62,
+        contents: Eof,
+    },
+]
