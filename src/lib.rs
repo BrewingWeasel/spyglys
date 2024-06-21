@@ -1,10 +1,11 @@
-use interpreter::{Interpreter, Value};
+use interpreter::{Interpreter, Statement, Value};
 use parser::{Lexer, Token};
 
+pub mod formatter;
 pub mod interpreter;
 pub mod parser;
 
-pub fn contents_to_interpreter(input: &str) -> Interpreter {
+pub fn parse_string(input: &str) -> Vec<Statement> {
     let mut lexed = Lexer::new(input).peekable();
 
     let mut statements = Vec::new();
@@ -17,6 +18,11 @@ pub fn contents_to_interpreter(input: &str) -> Interpreter {
         };
         statements.push(statement);
     }
+    statements
+}
+
+pub fn contents_to_interpreter(input: &str) -> Interpreter {
+    let statements = parse_string(input);
     let mut i = Interpreter::new();
     i.run_statements(statements);
     i
