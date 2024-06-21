@@ -107,6 +107,26 @@ impl Interpreter {
                             values[2].clone()
                         }
                     }
+                    "map" => {
+                        if values.len() != 2 {
+                            todo!();
+                        }
+                        if values[0] != Value::Empty {
+                            values[1].clone()
+                        } else {
+                            Value::Empty
+                        }
+                    }
+                    "unwrap_empty" => {
+                        if values.len() != 2 {
+                            todo!();
+                        }
+                        if values[0] == Value::Empty {
+                            values[1].clone()
+                        } else {
+                            values[0].clone()
+                        }
+                    }
                     _ => todo!(),
                 }
             }
