@@ -1,0 +1,36 @@
+---
+source: src/parser.rs
+expression: parse_statement(&mut tokens)
+---
+Some(
+    Def(
+        "do_thing",
+        Regex(
+            "parse_(?<name>.)",
+        ),
+        Builtin(
+            "if_else",
+            [
+                Variable(
+                    "name",
+                ),
+                Plus(
+                    Plus(
+                        String(
+                            "asdfkl",
+                        ),
+                        String(
+                            "asdklfj",
+                        ),
+                    ),
+                    String(
+                        "aksldfasdfj",
+                    ),
+                ),
+                String(
+                    "yes",
+                ),
+            ],
+        ),
+    ),
+)

@@ -1,0 +1,32 @@
+---
+source: src/parser.rs
+expression: "parse_expression(&mut tokens, Token::Eof)"
+---
+Some(
+    Call(
+        "run_thing?",
+        Plus(
+            Plus(
+                Plus(
+                    Plus(
+                        Regex(
+                            "v",
+                        ),
+                        Regex(
+                            "$#@!@",
+                        ),
+                    ),
+                    Regex(
+                        "#$@$@#$@#$@#$",
+                    ),
+                ),
+                Variable(
+                    "other",
+                ),
+            ),
+            Variable(
+                "another",
+            ),
+        ),
+    ),
+)

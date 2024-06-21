@@ -1,0 +1,56 @@
+---
+source: src/parser.rs
+expression: parse_statement(&mut tokens)
+---
+Some(
+    Def(
+        "do_thing",
+        Plus(
+            Plus(
+                Plus(
+                    Plus(
+                        Regex(
+                            "hi (?<name>.*)",
+                        ),
+                        Variable(
+                            "other",
+                        ),
+                    ),
+                    Variable(
+                        "variables",
+                    ),
+                ),
+                Variable(
+                    "and",
+                ),
+            ),
+            Variable(
+                "stuff",
+            ),
+        ),
+        Plus(
+            Plus(
+                String(
+                    "hello ",
+                ),
+                Variable(
+                    "name",
+                ),
+            ),
+            Builtin(
+                "if_else",
+                [
+                    Variable(
+                        "other",
+                    ),
+                    String(
+                        ", how are you?",
+                    ),
+                    String(
+                        "!",
+                    ),
+                ],
+            ),
+        ),
+    ),
+)

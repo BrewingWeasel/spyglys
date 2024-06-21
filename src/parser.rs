@@ -252,11 +252,10 @@ fn parse_partial_expression(
 
 #[cfg(test)]
 mod test {
-    use super::Token;
-
     use super::parse_expression;
-
+    use super::parse_statement;
     use super::Lexer;
+    use super::Token;
 
     #[test]
     fn test_lexing_basic() {
@@ -276,8 +275,63 @@ mod test {
     }
 
     #[test]
-    fn test_parsing_function() {
+    fn test_parsing_simple_call() {
         let mut tokens = Lexer::new("run_thing('v')").peekable();
         insta::assert_debug_snapshot!(parse_expression(&mut tokens, Token::Eof))
+    }
+
+    #[test]
+    fn test_parsing_complex_call() {
+        let mut tokens =
+            Lexer::new("run_thing?('v' + '$#@!@' + '#$@$@#$@#$@#$' + other + another)").peekable();
+        insta::assert_debug_snapshot!(parse_expression(&mut tokens, Token::Eof))
+    }
+
+    #[test]
+    fn test_parsing_unicode_ident() {
+        let mut tokens = Lexer::new("lietuviškasKintamasis").peekable();
+        insta::assert_debug_snapshot!(parse_expression(&mut tokens, Token::Eof))
+    }
+
+    #[test]
+    fn test_parsing_adding_strings() {
+        let mut tokens = Lexer::new(r#" "pirmas" + "antras" "#).peekable();
+        insta::assert_debug_snapshot!(parse_expression(&mut tokens, Token::Eof))
+    }
+
+    #[test]
+    fn test_parsing_simple_function_def() {
+        let mut tokens = Lexer::new(
+            r#"
+def do_thing('hi (?<name>.*)'):
+    "hello " + name;
+"#,
+        )
+        .peekable();
+        insta::assert_debug_snapshot!(parse_statement(&mut tokens))
+    }
+
+    #[test]
+    fn test_parsing_complex_function_def() {
+        let mut tokens = Lexer::new(
+            r#"
+def      do_thing('hi (?<name>.*)' + other + variables + and + stuff):
+    "hello " + name + $if_else(other, ", how are you?", "!",);
+"#,
+        )
+        .peekable();
+        insta::assert_debug_snapshot!(parse_statement(&mut tokens))
+    }
+
+    #[test]
+    fn test_parsing_builtin_in_func() {
+        let mut tokens = Lexer::new(
+            r#"
+def do_thing('parse_(?<name>.)'):
+    $if_else(name, "asdfkl" + "asdklfj" + "aksldfasdfj", "yes",);
+"#,
+        )
+        .peekable();
+        insta::assert_debug_snapshot!(parse_statement(&mut tokens))
     }
 }
