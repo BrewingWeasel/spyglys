@@ -28,7 +28,7 @@ fn main() {
     if args.shell {
         let mut line_editor = Reedline::create();
         let prompt = DefaultPrompt::new(
-            DefaultPromptSegment::Basic("> ".to_owned()),
+            DefaultPromptSegment::Basic(String::new()),
             DefaultPromptSegment::CurrentDateTime,
         );
         loop {

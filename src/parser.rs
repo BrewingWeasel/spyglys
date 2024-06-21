@@ -16,6 +16,7 @@ pub enum Token {
     RParen,
     Plus,
     QuestionMark,
+    Dollars,
     Regex(String),
     Str(String),
     Ident(String),
@@ -23,6 +24,7 @@ pub enum Token {
     Let,
     Equals,
     Semicolon,
+    Comma,
 }
 
 impl Display for Token {
@@ -33,8 +35,10 @@ impl Display for Token {
             Token::RParen => write!(f, ")"),
             Token::Plus => write!(f, "+"),
             Token::Equals => write!(f, "="),
+            Token::Comma => write!(f, ","),
             Token::Semicolon => write!(f, ";"),
             Token::QuestionMark => write!(f, "?"),
+            Token::Dollars => write!(f, "$"),
             Token::Regex(s) => write!(f, "'{s}'"),
             Token::Str(s) => write!(f, "\"{s}\""),
             Token::Ident(s) => write!(f, "{s}"),
@@ -109,6 +113,8 @@ impl<'input> Iterator for Lexer<'input> {
             ')' => Token::RParen,
             '+' => Token::Plus,
             '?' => Token::QuestionMark,
+            '$' => Token::Dollars,
+            ',' => Token::Comma,
             '=' => Token::Equals,
             ';' => Token::Semicolon,
             d if d == '\'' || d == '"' => {
@@ -219,6 +225,23 @@ fn parse_partial_expression(
             Token::Plus => {
                 let next = parse_partial_expression(tokens, previous.clone());
                 Some(Expression::Plus(Box::new(previous?), Box::new(next?)))
+            }
+            Token::Dollars => {
+                let Some(ident) = tokens.next() else { todo!() };
+                let Token::Ident(name) = ident.contents else {
+                    todo!()
+                };
+                tokens.next();
+                let mut contents = Vec::new();
+                while let Some(t) = tokens.peek() {
+                    if t.contents == Token::RParen {
+                        tokens.next();
+                        break;
+                    }
+                    contents.push(Box::new(parse_expression(tokens, Token::Comma)?));
+                    tokens.next();
+                }
+                Some(Expression::Builtin(name, contents))
             }
             _ => None,
         }

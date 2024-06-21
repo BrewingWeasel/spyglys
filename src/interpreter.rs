@@ -8,9 +8,9 @@ pub enum Expression {
     String(String),
     Variable(String),
     Plus(Box<Expression>, Box<Expression>),
-    Ternary(Box<Expression>, Box<Expression>, Box<Expression>),
     Empty,
     Call(String, Box<Expression>),
+    Builtin(String, Vec<Box<Expression>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,14 +68,6 @@ impl Interpreter {
                     }
                 }
             }
-            Expression::Ternary(cond, v1, v2) => {
-                let option = self.eval(cond, additional);
-                if option != Value::Empty {
-                    self.eval(v1, additional)
-                } else {
-                    self.eval(v2, additional)
-                }
-            }
             Expression::Regex(r) => Value::Regex((*r).to_owned()),
             Expression::String(s) => Value::Str((*s).to_owned()),
             Expression::Variable(var) => {
@@ -98,6 +90,25 @@ impl Interpreter {
                     todo!()
                 };
                 Value::Str(self.run_function(func, &input))
+            }
+            Expression::Builtin(func, exprs) => {
+                let values: Vec<Value> = exprs
+                    .iter()
+                    .map(|expr| self.eval(expr, additional))
+                    .collect();
+                match func.as_str() {
+                    "if_else" => {
+                        if values.len() != 3 {
+                            todo!();
+                        }
+                        if values[0] != Value::Empty {
+                            values[1].clone()
+                        } else {
+                            values[2].clone()
+                        }
+                    }
+                    _ => todo!(),
+                }
             }
         }
     }
@@ -168,13 +179,16 @@ mod test {
     use crate::interpreter::*;
 
     #[test]
-    fn test_ternary_true() {
+    fn test_if_else_true() {
         let interpreter: Interpreter = Default::default();
         let v = interpreter.eval(
-            &Expression::Ternary(
-                Box::new(Expression::String("exists".to_owned())),
-                Box::new(Expression::String("t".to_owned())),
-                Box::new(Expression::String("f".to_owned())),
+            &Expression::Builtin(
+                "if-else".to_owned(),
+                vec![
+                    Box::new(Expression::String("exists".to_owned())),
+                    Box::new(Expression::String("t".to_owned())),
+                    Box::new(Expression::String("f".to_owned())),
+                ],
             ),
             None,
         );
@@ -182,13 +196,16 @@ mod test {
     }
 
     #[test]
-    fn test_ternary_false() {
+    fn test_if_else_false() {
         let interpreter: Interpreter = Default::default();
         let v = interpreter.eval(
-            &Expression::Ternary(
-                Box::new(Expression::Empty),
-                Box::new(Expression::String("t".to_owned())),
-                Box::new(Expression::String("f".to_owned())),
+            &Expression::Builtin(
+                "if-else".to_owned(),
+                vec![
+                    Box::new(Expression::Empty),
+                    Box::new(Expression::String("t".to_owned())),
+                    Box::new(Expression::String("f".to_owned())),
+                ],
             ),
             None,
         );
@@ -207,10 +224,13 @@ mod test {
                 Box::new(Expression::Variable("stem".to_owned())),
                 Box::new(Expression::Plus(
                     Box::new(Expression::String("ti".to_owned())),
-                    Box::new(Expression::Ternary(
-                        Box::new(Expression::Variable("reflexive".to_owned())),
-                        Box::new(Expression::String("s".to_owned())),
-                        Box::new(Expression::String("".to_owned())),
+                    Box::new(Expression::Builtin(
+                        "if-else".to_owned(),
+                        vec![
+                            Box::new(Expression::Variable("reflexive".to_owned())),
+                            Box::new(Expression::String("s".to_owned())),
+                            Box::new(Expression::String("".to_owned())),
+                        ],
                     )),
                 )),
             ),
