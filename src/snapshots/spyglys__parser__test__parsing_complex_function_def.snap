@@ -2,7 +2,7 @@
 source: src/parser.rs
 expression: parse_statement(&mut tokens)
 ---
-Some(
+Ok(
     Def(
         "do_thing",
         Plus(

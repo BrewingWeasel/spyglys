@@ -2,7 +2,7 @@
 source: src/parser.rs
 expression: "parse_expression(&mut tokens, Token::Eof)"
 ---
-Some(
+Ok(
     Call(
         "run_thing",
         Regex(
