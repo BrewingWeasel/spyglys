@@ -54,29 +54,29 @@ impl Statement {
                 )
                 .nest(INDENT_SIZE)
                 .group(),
-            Statement::Def(func, matcher, handler) => RcDoc::line().append(
-                RcDoc::text("def")
-                    .append(RcDoc::space())
-                    .append(RcDoc::text(func))
-                    .append(RcDoc::space())
-                    .append(RcDoc::text("("))
-                    .append(
-                        RcDoc::line_()
-                            .append(matcher.to_doc())
-                            .append(RcDoc::line_())
-                            .nest(INDENT_SIZE)
-                            .group(),
-                    )
-                    .append(RcDoc::text(")"))
-                    .group()
-                    .append(RcDoc::text(":"))
-                    .append(
-                        RcDoc::line()
-                            .append(handler.to_doc())
-                            .append(RcDoc::text(";"))
-                            .nest(INDENT_SIZE),
-                    ),
-            ),
+            Statement::Def(func, matcher, handler) => RcDoc::text("def")
+                .append(RcDoc::space())
+                .append(RcDoc::text(func))
+                .append(RcDoc::space())
+                .append(RcDoc::text("("))
+                .append(
+                    RcDoc::line_()
+                        .append(matcher.to_doc())
+                        .append(RcDoc::line_())
+                        .nest(INDENT_SIZE)
+                        .group(),
+                )
+                .append(RcDoc::text(")"))
+                .group()
+                .append(RcDoc::text(":"))
+                .append(
+                    RcDoc::line()
+                        .append(handler.to_doc())
+                        .append(RcDoc::text(";"))
+                        .nest(INDENT_SIZE),
+                ),
+            Statement::Comment(c) => RcDoc::as_string(format!("#{c}")),
+            Statement::NewLine => RcDoc::text(""),
         }
         .append(RcDoc::line())
     }
@@ -87,8 +87,21 @@ const INDENT_SIZE: isize = 4;
 
 pub fn pretty_file(statements: &[Statement]) -> String {
     let mut w = Vec::new();
+    let mut last = None;
     for statement in statements {
+        if matches!(statement, Statement::Def(_, _, _))
+            && !matches!(
+                last,
+                Some(&Statement::Comment(_)) | Some(Statement::NewLine)
+            )
+        {
+            RcDoc::<()>::line().render(WIDTH, &mut w).unwrap();
+        }
+        if matches!(last, Some(Statement::NewLine)) && statement == &Statement::NewLine {
+            continue;
+        }
         statement.to_doc().render(WIDTH, &mut w).unwrap();
+        last = Some(statement);
     }
     String::from_utf8(w).unwrap()
 }

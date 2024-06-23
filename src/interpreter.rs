@@ -17,6 +17,8 @@ pub enum Expression {
 pub enum Statement {
     Let(String, Expression),
     Def(String, Expression, Expression),
+    Comment(String),
+    NewLine,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -257,6 +259,7 @@ impl Interpreter {
                 Statement::Def(func_name, pattern, handler) => {
                     self.scope.functions.insert(func_name, (pattern, handler));
                 }
+                Statement::Comment(_) | Statement::NewLine => {}
             }
         }
         Ok(())

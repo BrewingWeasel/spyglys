@@ -25,6 +25,8 @@ pub enum Token {
     Equals,
     Semicolon,
     Comma,
+    Comment(String),
+    NewLine,
 }
 
 impl Display for Token {
@@ -44,6 +46,8 @@ impl Display for Token {
             Token::Ident(s) => write!(f, "{s}"),
             Token::Def => write!(f, "def"),
             Token::Let => write!(f, "let"),
+            Token::Comment(c) => write!(f, "#{c}"),
+            Token::NewLine => writeln!(f),
         }
     }
 }
@@ -115,6 +119,13 @@ impl<'input> Iterator for Lexer<'input> {
                 break;
             }
             self.next_char();
+            if c == '\n' {
+                return Some(Spanned {
+                    start: self.position - 1,
+                    end: self.position,
+                    contents: Token::NewLine,
+                });
+            }
         }
 
         let start_pos = self.position;
@@ -137,6 +148,17 @@ impl<'input> Iterator for Lexer<'input> {
             ',' => Token::Comma,
             '=' => Token::Equals,
             ';' => Token::Semicolon,
+            '#' => {
+                let mut conts = String::new();
+                while let Some(c) = self.peek_char() {
+                    if c == '\n' {
+                        break;
+                    }
+                    conts.push(c);
+                    self.next_char();
+                }
+                Token::Comment(conts)
+            }
             d if d == '\'' || d == '"' => {
                 let mut conts = String::new();
                 while let Some(c) = self.assert_next_char() {
@@ -275,6 +297,20 @@ pub fn parse_statement(tokens: &mut Peekable<Lexer>) -> Result<Statement, Parsin
                 tokens.next();
                 Ok(Statement::Def(func_name, matching, handler))
             }
+            Token::Comment(c) => Ok(Statement::Comment(c)),
+            Token::NewLine => {
+                if matches!(
+                    tokens.peek(),
+                    Some(Spanned {
+                        contents: Token::NewLine,
+                        ..
+                    })
+                ) {
+                    Ok(Statement::NewLine)
+                } else {
+                    parse_statement(tokens)
+                }
+            }
             _ => Err(ParsingError {
                 err_type: ParsingErrorType::InvalidStatement,
                 start: t.start,
@@ -383,6 +419,7 @@ fn parse_partial_expression(
                 }
                 Ok(Expression::Builtin(name, contents))
             }
+            Token::NewLine => parse_partial_expression(tokens, previous),
             _ => Err(ParsingError {
                 err_type: ParsingErrorType::InvalidExpression,
                 start: t.start,
