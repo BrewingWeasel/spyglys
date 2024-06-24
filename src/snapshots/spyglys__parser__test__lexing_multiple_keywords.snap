@@ -9,16 +9,34 @@ expression: "Lexer::new(\"let\n\n    def   \n\n            end   let   def end d
         contents: Let,
     },
     Spanned {
+        start: 3,
+        end: 4,
+        contents: NewLine,
+    },
+    Spanned {
+        start: 4,
+        end: 5,
+        contents: NewLine,
+    },
+    Spanned {
         start: 9,
         end: 12,
         contents: Def,
     },
     Spanned {
+        start: 15,
+        end: 16,
+        contents: NewLine,
+    },
+    Spanned {
+        start: 16,
+        end: 17,
+        contents: NewLine,
+    },
+    Spanned {
         start: 29,
         end: 32,
-        contents: Ident(
-            "end",
-        ),
+        contents: End,
     },
     Spanned {
         start: 35,
@@ -33,9 +51,7 @@ expression: "Lexer::new(\"let\n\n    def   \n\n            end   let   def end d
     Spanned {
         start: 45,
         end: 48,
-        contents: Ident(
-            "end",
-        ),
+        contents: End,
     },
     Spanned {
         start: 49,

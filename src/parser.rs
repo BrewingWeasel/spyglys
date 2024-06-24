@@ -27,6 +27,12 @@ pub enum Token {
     Comma,
     Comment(String),
     NewLine,
+    End,
+    // RESERVED (not all)
+    Where,
+    For,
+    When,
+    Rule,
 }
 
 impl Display for Token {
@@ -46,6 +52,11 @@ impl Display for Token {
             Token::Ident(s) => write!(f, "{s}"),
             Token::Def => write!(f, "def"),
             Token::Let => write!(f, "let"),
+            Token::End => write!(f, "end"),
+            Token::Where => write!(f, "where"),
+            Token::For => write!(f, "for"),
+            Token::When => write!(f, "when"),
+            Token::Rule => write!(f, "rule"),
             Token::Comment(c) => write!(f, "#{c}"),
             Token::NewLine => writeln!(f),
         }
@@ -192,6 +203,10 @@ impl<'input> Iterator for Lexer<'input> {
                 match conts.as_str() {
                     "def" => Token::Def,
                     "let" => Token::Let,
+                    "end" => Token::End,
+                    "where" => Token::Where,
+                    "when" => Token::When,
+                    "rule" => Token::Rule,
                     _ => Token::Ident(conts),
                 }
             }
@@ -293,7 +308,9 @@ pub fn parse_statement(tokens: &mut Peekable<Lexer>) -> Result<Statement, Parsin
 
                 // )
                 tokens.next();
-                let handler = parse_expression(tokens, Token::Semicolon)?;
+                // :
+                tokens.next();
+                let handler = parse_expression(tokens, Token::End)?;
                 tokens.next();
                 Ok(Statement::Def(func_name, matching, handler))
             }
@@ -302,7 +319,7 @@ pub fn parse_statement(tokens: &mut Peekable<Lexer>) -> Result<Statement, Parsin
                 if matches!(
                     tokens.peek(),
                     Some(Spanned {
-                        contents: Token::NewLine,
+                        contents: Token::NewLine | Token::Eof,
                         ..
                     })
                 ) {
@@ -334,6 +351,10 @@ pub fn parse_expression(
     while let Some(t) = tokens.peek() {
         if t.contents == ending {
             break;
+        }
+        if t.contents == Token::NewLine {
+            tokens.next();
+            continue;
         }
         let new_expr = parse_partial_expression(tokens, previous)?;
         previous = Some(new_expr);

@@ -69,12 +69,9 @@ impl Statement {
                 .append(RcDoc::text(")"))
                 .group()
                 .append(RcDoc::text(":"))
-                .append(
-                    RcDoc::line()
-                        .append(handler.to_doc())
-                        .append(RcDoc::text(";"))
-                        .nest(INDENT_SIZE),
-                ),
+                .append(RcDoc::line().append(handler.to_doc()).nest(INDENT_SIZE))
+                .append(RcDoc::line())
+                .append(RcDoc::text("end")),
             Statement::Comment(c) => RcDoc::as_string(format!("#{c}")),
             Statement::NewLine => RcDoc::text(""),
         }
@@ -103,5 +100,5 @@ pub fn pretty_file(statements: &[Statement]) -> String {
         statement.to_doc().render(WIDTH, &mut w).unwrap();
         last = Some(statement);
     }
-    String::from_utf8(w).unwrap()
+    String::from_utf8(w).unwrap().trim().to_owned()
 }

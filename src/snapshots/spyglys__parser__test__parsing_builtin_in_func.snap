@@ -2,35 +2,10 @@
 source: src/parser.rs
 expression: parse_statement(&mut tokens)
 ---
-Ok(
-    Def(
-        "do_thing",
-        Regex(
-            "parse_(?<name>.)",
-        ),
-        Builtin(
-            "if_else",
-            [
-                Variable(
-                    "name",
-                ),
-                Plus(
-                    Plus(
-                        String(
-                            "asdfkl",
-                        ),
-                        String(
-                            "asdklfj",
-                        ),
-                    ),
-                    String(
-                        "aksldfasdfj",
-                    ),
-                ),
-                String(
-                    "yes",
-                ),
-            ],
-        ),
-    ),
+Err(
+    ParsingError {
+        err_type: InvalidExpression,
+        start: 99,
+        end: 100,
+    },
 )

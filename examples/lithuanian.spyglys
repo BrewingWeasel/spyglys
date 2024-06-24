@@ -3,10 +3,13 @@ let root_verb_form = '(?<stem>\w*)ti';
 let verb_prefix = '(?<prefix>ap|apy|at|ati|iš|į|nu|pa|pri|pra|su|už)(?<reflexive>si)?';
 
 def remove_universal_prefix (universal_prefix + '(?<rest>\w+$)'):
-    rest;
+    rest
+end
 
 def remove_verb_prefix (verb_prefix + root_verb_form + '$'):
-    stem + "ti" + $map(reflexive, "s", );
+    stem + "ti" + $map(reflexive, "s", )
+end
 
 def unreflexify (root_verb_form + 's$'):
-    stem + "ti";
+    stem + "ti"
+end

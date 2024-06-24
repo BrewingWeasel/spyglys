@@ -2,19 +2,10 @@
 source: src/parser.rs
 expression: parse_statement(&mut tokens)
 ---
-Ok(
-    Def(
-        "do_thing",
-        Regex(
-            "hi (?<name>.*)",
-        ),
-        Plus(
-            String(
-                "hello ",
-            ),
-            Variable(
-                "name",
-            ),
-        ),
-    ),
+Err(
+    ParsingError {
+        err_type: InvalidExpression,
+        start: 52,
+        end: 53,
+    },
 )

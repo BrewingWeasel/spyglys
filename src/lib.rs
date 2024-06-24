@@ -59,10 +59,7 @@ pub fn parse_string(input: &str) -> Result<Vec<Statement>, SpyglysError> {
         if t.contents == Token::Eof {
             break;
         }
-        let Ok(statement) = parser::parse_statement(&mut lexed) else {
-            continue;
-        };
-        statements.push(statement);
+        statements.push(parser::parse_statement(&mut lexed).map_err(SpyglysError::Parsing)?);
     }
     Ok(statements)
 }
