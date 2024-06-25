@@ -63,7 +63,7 @@ fn main() {
                 match sig {
                     Ok(reedline::Signal::Success(buffer)) => {
                         match run_input(&buffer, &mut interpreter) {
-                            Ok(v) => println!("{v}"),
+                            Ok(v) => println!("=> {v}"),
                             Err(e) => eprintln!("{e}"),
                         };
                     }
