@@ -192,46 +192,63 @@ impl Interpreter {
                 }
             }
             Expression::Builtin(func, exprs) => {
-                let values: Result<Vec<Value>, RuntimeError> = exprs
-                    .iter()
-                    .map(|expr| self.eval(expr, additional))
-                    .collect();
-                let values = values?;
+                let mut values = exprs.iter().map(|expr| self.eval(expr, additional));
                 match func.as_str() {
                     "if_else" => {
-                        if values.len() != 3 {
+                        if exprs.len() != 3 {
                             Err(RuntimeError {
                                 when_evaluating: expr.clone(),
                                 error_type: RuntimeErrorType::WrongNumberOfArgs(values.len(), 3),
                             })
-                        } else if values[0] != Value::Empty {
-                            Ok(values[1].clone())
+                        } else if values
+                            .next()
+                            .expect("values count has already been determined")?
+                            != Value::Empty
+                        {
+                            values
+                                .next()
+                                .expect("values count has already been determined")
                         } else {
-                            Ok(values[2].clone())
+                            values.next();
+                            values
+                                .next()
+                                .expect("values count has already been determined")
                         }
                     }
                     "map" => {
-                        if values.len() != 2 {
+                        if exprs.len() != 2 {
                             Err(RuntimeError {
                                 when_evaluating: expr.clone(),
                                 error_type: RuntimeErrorType::WrongNumberOfArgs(values.len(), 2),
                             })
-                        } else if values[0] != Value::Empty {
-                            Ok(values[1].clone())
+                        } else if values
+                            .next()
+                            .expect("values count has already been determined")?
+                            != Value::Empty
+                        {
+                            values
+                                .next()
+                                .expect("values count has already been determined")
                         } else {
                             Ok(Value::Empty)
                         }
                     }
                     "unwrap_empty" => {
-                        if values.len() != 2 {
-                            Err(RuntimeError {
+                        if exprs.len() != 2 {
+                            return Err(RuntimeError {
                                 when_evaluating: expr.clone(),
                                 error_type: RuntimeErrorType::WrongNumberOfArgs(values.len(), 2),
-                            })
-                        } else if values[0] == Value::Empty {
-                            Ok(values[1].clone())
+                            });
+                        }
+                        let initial = values
+                            .next()
+                            .expect("values count has already been determined")?;
+                        if initial != Value::Empty {
+                            values
+                                .next()
+                                .expect("values count has already been determined")
                         } else {
-                            Ok(values[0].clone())
+                            Ok(initial)
                         }
                     }
                     v => Err(RuntimeError {
