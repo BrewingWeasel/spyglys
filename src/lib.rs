@@ -75,7 +75,7 @@ pub fn contents_to_interpreter(input: &str) -> Result<Interpreter, SpyglysError>
 pub fn run_input(input: &str, interpreter: &mut Interpreter) -> Result<Value, SpyglysError> {
     let mut lexed = Lexer::new(input).peekable();
 
-    match parser::parse_expression(&mut lexed, Token::Eof) {
+    match parser::parse_expression(&mut lexed, &[Token::Eof]) {
         Ok(expr) => {
             let resp = interpreter.eval(&expr, None);
             return resp.map_err(SpyglysError::Runtime);

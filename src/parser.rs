@@ -267,7 +267,7 @@ pub fn parse_statement(tokens: &mut Peekable<Lexer>) -> Result<Statement, Parsin
                         end: t.end,
                     });
                 }
-                let value = parse_expression(tokens, Token::Semicolon)?;
+                let value = parse_expression(tokens, &[Token::Semicolon])?;
                 tokens.next();
                 Ok(Statement::Let(var_name, value))
             }
@@ -304,13 +304,13 @@ pub fn parse_statement(tokens: &mut Peekable<Lexer>) -> Result<Statement, Parsin
                     });
                 }
 
-                let matching = parse_expression(tokens, Token::RParen)?;
+                let matching = parse_expression(tokens, &[Token::RParen])?;
 
                 // )
                 tokens.next();
                 // :
                 tokens.next();
-                let handler = parse_expression(tokens, Token::End)?;
+                let handler = parse_expression(tokens, &[Token::End])?;
                 tokens.next();
                 Ok(Statement::Def(func_name, matching, handler))
             }
@@ -345,11 +345,11 @@ pub fn parse_statement(tokens: &mut Peekable<Lexer>) -> Result<Statement, Parsin
 
 pub fn parse_expression(
     tokens: &mut Peekable<Lexer>,
-    ending: Token,
+    endings: &[Token],
 ) -> Result<Expression, ParsingError> {
     let mut previous = None;
     while let Some(t) = tokens.peek() {
-        if t.contents == ending {
+        if endings.contains(&t.contents) {
             break;
         }
         if t.contents == Token::NewLine {
@@ -378,7 +378,7 @@ fn parse_partial_expression(
                 if let Some(t) = tokens.peek() {
                     if t.contents == Token::LParen {
                         tokens.next();
-                        let inner = parse_expression(tokens, Token::RParen)?;
+                        let inner = parse_expression(tokens, &[Token::RParen])?;
                         tokens.next();
                         return Ok(Expression::Call(name, Box::new(inner)));
                     }
@@ -435,8 +435,19 @@ fn parse_partial_expression(
                         tokens.next();
                         break;
                     }
-                    contents.push(Box::new(parse_expression(tokens, Token::Comma)?));
-                    tokens.next();
+                    contents.push(Box::new(parse_expression(
+                        tokens,
+                        &[Token::Comma, Token::RParen],
+                    )?));
+                    if matches!(
+                        tokens.peek(),
+                        Some(Spanned {
+                            contents: Token::Comma,
+                            ..
+                        }),
+                    ) {
+                        tokens.next();
+                    }
                 }
                 Ok(Expression::Builtin(name, contents))
             }
@@ -483,26 +494,26 @@ mod test {
     #[test]
     fn test_parsing_simple_call() {
         let mut tokens = Lexer::new("run_thing('v')").peekable();
-        insta::assert_debug_snapshot!(parse_expression(&mut tokens, Token::Eof))
+        insta::assert_debug_snapshot!(parse_expression(&mut tokens, &[Token::Eof]))
     }
 
     #[test]
     fn test_parsing_complex_call() {
         let mut tokens =
             Lexer::new("run_thing?('v' + '$#@!@' + '#$@$@#$@#$@#$' + other + another)").peekable();
-        insta::assert_debug_snapshot!(parse_expression(&mut tokens, Token::Eof))
+        insta::assert_debug_snapshot!(parse_expression(&mut tokens, &[Token::Eof]))
     }
 
     #[test]
     fn test_parsing_unicode_ident() {
         let mut tokens = Lexer::new("lietuviškasKintamasis").peekable();
-        insta::assert_debug_snapshot!(parse_expression(&mut tokens, Token::Eof))
+        insta::assert_debug_snapshot!(parse_expression(&mut tokens, &[Token::Eof]))
     }
 
     #[test]
     fn test_parsing_adding_strings() {
         let mut tokens = Lexer::new(r#" "pirmas" + "antras" "#).peekable();
-        insta::assert_debug_snapshot!(parse_expression(&mut tokens, Token::Eof))
+        insta::assert_debug_snapshot!(parse_expression(&mut tokens, &[Token::Eof]))
     }
 
     #[test]
@@ -510,7 +521,8 @@ mod test {
         let mut tokens = Lexer::new(
             r#"
 def do_thing('hi (?<name>.*)'):
-    "hello " + name;
+    "hello " + name
+end
 "#,
         )
         .peekable();
@@ -522,7 +534,8 @@ def do_thing('hi (?<name>.*)'):
         let mut tokens = Lexer::new(
             r#"
 def      do_thing('hi (?<name>.*)' + other + variables + and + stuff):
-    "hello " + name + $if_else(other, ", how are you?", "!",);
+    "hello " + name + $if_else(other, ", how are you?", "!",)
+end
 "#,
         )
         .peekable();
@@ -534,7 +547,21 @@ def      do_thing('hi (?<name>.*)' + other + variables + and + stuff):
         let mut tokens = Lexer::new(
             r#"
 def do_thing('parse_(?<name>.)'):
-    $if_else(name, "asdfkl" + "asdklfj" + "aksldfasdfj", "yes",);
+    $if_else(name, "asdfkl" + "asdklfj" + "aksldfasdfj", "yes",)
+end
+"#,
+        )
+        .peekable();
+        insta::assert_debug_snapshot!(parse_statement(&mut tokens))
+    }
+
+    #[test]
+    fn test_parsing_builtin_in_func_without_comma() {
+        let mut tokens = Lexer::new(
+            r#"
+def do_thing('parse_(?<name>.)'):
+    $if_else(name, "asdfkl" + "asdklfj" + "aksldfasdfj", "yes")
+end
 "#,
         )
         .peekable();
