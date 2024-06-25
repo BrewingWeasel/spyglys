@@ -417,6 +417,6 @@ mod test {
             ),
             "persikelti",
         );
-        assert_eq!(v, Ok("keltis".to_owned()));
+        assert_eq!(v, Ok(Value::Str("keltis".to_owned())));
     }
 }
