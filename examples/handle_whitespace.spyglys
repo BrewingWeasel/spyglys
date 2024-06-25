@@ -1,0 +1,14 @@
+let whitespace = '\s*';
+let main = '(?<main>\S(.*\S)?)';
+
+def trim ('^' + whitespace + main + whitespace + '$'):
+    main
+end
+
+def trim_left ('^' + whitespace + main):
+    main
+end
+
+def trim_right (main + whitespace + '$'):
+    main
+end
