@@ -145,6 +145,9 @@ impl Interpreter {
                         s1.push_str(&s2);
                         Ok(Value::Str(s1))
                     }
+                    (Value::Str(s), Value::Empty) | (Value::Empty, Value::Str(s)) => {
+                        Ok(Value::Str(s))
+                    }
                     (Value::Regex(mut r1), Value::Regex(r2)) => {
                         r1.push_str(&r2);
                         Ok(Value::Regex(r1))
