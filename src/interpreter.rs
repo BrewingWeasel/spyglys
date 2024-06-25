@@ -180,7 +180,7 @@ impl Interpreter {
             Expression::Call(func, expr) => {
                 let call_value = self.eval(expr, additional)?;
                 if let Value::Str(input) = call_value {
-                    Ok(Value::Str(self.run_function(func, &input)?))
+                    self.run_function(func, &input)
                 } else {
                     Err(RuntimeError {
                         when_evaluating: *expr.clone(),
@@ -265,7 +265,7 @@ impl Interpreter {
         Ok(())
     }
 
-    pub fn run_function(&self, function: &str, input: &str) -> Result<String, RuntimeError> {
+    pub fn run_function(&self, function: &str, input: &str) -> Result<Value, RuntimeError> {
         if let Some((matcher, handler)) = self.scope.functions.get(function) {
             self.eval_function(matcher, handler, input)
         } else {
@@ -284,7 +284,7 @@ impl Interpreter {
         matcher: &Expression,
         handler: &Expression,
         input: &str,
-    ) -> Result<String, RuntimeError> {
+    ) -> Result<Value, RuntimeError> {
         let matched = self.eval(matcher, None)?;
         let Value::Regex(regex_matching) = matched else {
             return Err(RuntimeError {
@@ -297,7 +297,9 @@ impl Interpreter {
         };
 
         let re = Regex::new(&regex_matching).unwrap();
-        let captures = re.captures(input).unwrap();
+        let Some(captures) = re.captures(input) else {
+            return Ok(Value::Empty);
+        };
         let mut variables = HashMap::new();
         for name in re.capture_names() {
             let Some(var_name) = name else {
@@ -319,8 +321,8 @@ impl Interpreter {
             }]),
         )?;
 
-        if let Value::Str(r) = handled {
-            Ok(r)
+        if let Value::Str(_) = handled {
+            Ok(handled)
         } else {
             Err(RuntimeError {
                 when_evaluating: matcher.clone(),
