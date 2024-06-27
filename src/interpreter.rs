@@ -16,9 +16,15 @@ pub enum Expression {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Statement {
     Let(String, Expression),
-    Def(String, Expression, Expression),
+    Def(String, Expression, Expression, Vec<TestRule>),
     Comment(String),
     NewLine,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TestRule {
+    pub input: Expression,
+    pub expected_output: Expression,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,7 +69,7 @@ pub struct Interpreter {
 #[derive(Debug, Clone, Default)]
 pub struct Scope {
     variables: HashMap<String, Value>,
-    functions: HashMap<String, (Expression, Expression)>,
+    functions: HashMap<String, (Expression, Expression, Vec<TestRule>)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,10 +87,17 @@ pub enum TypeErrorType {
     ExpectedType(Type, Value),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeError {
     pub when_evaluating: Expression,
     pub error_type: RuntimeErrorType,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CompileTimeError {
+    TestFailed(String, Value, Value),
+    RuntimeErrorInTest(String, RuntimeError),
+    IncorrectTestType(String, Value),
 }
 
 impl Display for RuntimeError {
@@ -269,6 +282,38 @@ impl Interpreter {
         }
     }
 
+    pub fn run_tests(&self) -> Result<(), CompileTimeError> {
+        for (func, (matcher, handler, tests)) in &self.scope.functions {
+            for test in tests {
+                let input_value = self
+                    .eval(&test.input, None)
+                    .map_err(|e| CompileTimeError::RuntimeErrorInTest(func.to_owned(), e))?;
+                let Value::Str(input) = input_value else {
+                    return Err(CompileTimeError::IncorrectTestType(
+                        func.to_owned(),
+                        input_value,
+                    ));
+                };
+
+                let expected_value = self
+                    .eval(&test.expected_output, None)
+                    .map_err(|e| CompileTimeError::RuntimeErrorInTest(func.to_owned(), e))?;
+
+                let output = self
+                    .eval_function(matcher, handler, &input)
+                    .map_err(|e| CompileTimeError::RuntimeErrorInTest(func.to_owned(), e))?;
+                if output != expected_value {
+                    return Err(CompileTimeError::TestFailed(
+                        func.to_owned(),
+                        output,
+                        expected_value,
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn run_statements(&mut self, statements: Vec<Statement>) -> Result<(), RuntimeError> {
         for statement in statements {
             match statement {
@@ -276,8 +321,10 @@ impl Interpreter {
                     let v = self.eval(&value, None)?;
                     self.scope.variables.insert(var.to_owned(), v);
                 }
-                Statement::Def(func_name, pattern, handler) => {
-                    self.scope.functions.insert(func_name, (pattern, handler));
+                Statement::Def(func_name, pattern, handler, test_rules) => {
+                    self.scope
+                        .functions
+                        .insert(func_name, (pattern, handler, test_rules));
                 }
                 Statement::Comment(_) | Statement::NewLine => {}
             }
@@ -286,7 +333,7 @@ impl Interpreter {
     }
 
     pub fn run_function(&self, function: &str, input: &str) -> Result<Value, RuntimeError> {
-        if let Some((matcher, handler)) = self.scope.functions.get(function) {
+        if let Some((matcher, handler, _test_rules)) = self.scope.functions.get(function) {
             self.eval_function(matcher, handler, input)
         } else {
             Err(RuntimeError {

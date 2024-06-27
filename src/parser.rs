@@ -1,6 +1,6 @@
 use std::{fmt::Display, iter::Peekable, str::Chars};
 
-use crate::interpreter::{Expression, Statement};
+use crate::interpreter::{Expression, Statement, TestRule};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Spanned<T> {
@@ -33,6 +33,7 @@ pub enum Token {
     For,
     When,
     Rule,
+    Arrow,
 }
 
 impl Display for Token {
@@ -47,6 +48,7 @@ impl Display for Token {
             Token::Semicolon => write!(f, ";"),
             Token::QuestionMark => write!(f, "?"),
             Token::Dollars => write!(f, "$"),
+            Token::Arrow => write!(f, "->"),
             Token::Regex(s) => write!(f, "'{s}'"),
             Token::Str(s) => write!(f, "\"{s}\""),
             Token::Ident(s) => write!(f, "{s}"),
@@ -159,6 +161,10 @@ impl<'input> Iterator for Lexer<'input> {
             ',' => Token::Comma,
             '=' => Token::Equals,
             ';' => Token::Semicolon,
+            '-' => match self.next_char() {
+                Some('>') => Token::Arrow,
+                _ => todo!(),
+            },
             '#' => {
                 let mut conts = String::new();
                 while let Some(c) = self.peek_char() {
@@ -310,9 +316,41 @@ pub fn parse_statement(tokens: &mut Peekable<Lexer>) -> Result<Statement, Parsin
                 tokens.next();
                 // :
                 tokens.next();
-                let handler = parse_expression(tokens, &[Token::End])?;
-                tokens.next();
-                Ok(Statement::Def(func_name, matching, handler))
+                let handler = parse_expression(tokens, &[Token::End, Token::Where])?;
+                let ending = tokens.next();
+                let mut rules = Vec::new();
+                if matches!(
+                    ending,
+                    Some(Spanned {
+                        contents: Token::Where,
+                        ..
+                    })
+                ) {
+                    while let Some(mut t) = tokens.peek() {
+                        while matches!(t.contents, Token::NewLine | Token::Comment(_)) {
+                            let location = t.end;
+                            tokens.next();
+                            t = tokens.peek().ok_or(ParsingError {
+                                start: location,
+                                end: location,
+                                err_type: ParsingErrorType::UnexpectedEOF,
+                            })?;
+                        }
+                        if t.contents == Token::End {
+                            tokens.next();
+                            break;
+                        }
+                        let input = parse_expression(tokens, &[Token::Arrow])?;
+                        tokens.next();
+                        let expected_output = parse_expression(tokens, &[Token::Semicolon])?;
+                        rules.push(TestRule {
+                            input,
+                            expected_output,
+                        });
+                        tokens.next();
+                    }
+                }
+                Ok(Statement::Def(func_name, matching, handler, rules))
             }
             Token::Comment(c) => Ok(Statement::Comment(c)),
             Token::NewLine => {

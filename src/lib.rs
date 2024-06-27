@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use interpreter::{Interpreter, RuntimeError, Statement, Value};
+use interpreter::{CompileTimeError, Interpreter, RuntimeError, Statement, Type, Value};
 use parser::{Lexer, LexingError, LexingErrorType, ParsingError, ParsingErrorType, Token};
 
 pub mod formatter;
@@ -11,6 +11,7 @@ pub enum SpyglysError {
     Lexing(LexingError),
     Parsing(ParsingError),
     Runtime(RuntimeError),
+    CompileTime(CompileTimeError),
 }
 
 impl Display for SpyglysError {
@@ -44,6 +45,24 @@ impl Display for SpyglysError {
                     }
                 }
             }
+            Self::CompileTime(e) => {
+                write!(f, "Compiletime error: ")?;
+                match e {
+                    CompileTimeError::TestFailed(fun, matcher, handler) => write!(
+                        f,
+                        "Test for function {fun} failed (`{:?}` did not match `{:?}`)",
+                        matcher, handler
+                    ),
+                    CompileTimeError::IncorrectTestType(fun, v) => write!(
+                        f,
+                        "Test for function {fun} had an incorrect type: value {v} (type: {:?})",
+                        std::convert::Into::<Type>::into(v.clone())
+                    ),
+                    CompileTimeError::RuntimeErrorInTest(fun, e) => {
+                        write!(f, "Runtime error in test for {fun}: {e}")
+                    }
+                }
+            }
             Self::Runtime(r) => {
                 write!(f, "{r}")
             }
@@ -69,6 +88,7 @@ pub fn contents_to_interpreter(input: &str) -> Result<Interpreter, SpyglysError>
     let mut i = Interpreter::new();
     i.run_statements(statements)
         .map_err(SpyglysError::Runtime)?;
+    i.run_tests().map_err(SpyglysError::CompileTime)?;
     Ok(i)
 }
 

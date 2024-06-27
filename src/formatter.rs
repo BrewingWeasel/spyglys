@@ -54,24 +54,44 @@ impl Statement {
                 )
                 .nest(INDENT_SIZE)
                 .group(),
-            Statement::Def(func, matcher, handler) => RcDoc::text("def")
-                .append(RcDoc::space())
-                .append(RcDoc::text(func))
-                .append(RcDoc::space())
-                .append(RcDoc::text("("))
-                .append(
-                    RcDoc::line_()
-                        .append(matcher.to_doc())
-                        .append(RcDoc::line_())
-                        .nest(INDENT_SIZE)
-                        .group(),
-                )
-                .append(RcDoc::text(")"))
-                .group()
-                .append(RcDoc::text(":"))
-                .append(RcDoc::line().append(handler.to_doc()).nest(INDENT_SIZE))
-                .append(RcDoc::line())
-                .append(RcDoc::text("end")),
+            Statement::Def(func, matcher, handler, rules) => {
+                let main = RcDoc::text("def")
+                    .append(RcDoc::space())
+                    .append(RcDoc::text(func))
+                    .append(RcDoc::space())
+                    .append(RcDoc::text("("))
+                    .append(
+                        RcDoc::line_()
+                            .append(matcher.to_doc())
+                            .append(RcDoc::line_())
+                            .nest(INDENT_SIZE)
+                            .group(),
+                    )
+                    .append(RcDoc::text(")"))
+                    .group()
+                    .append(RcDoc::text(":"))
+                    .append(RcDoc::line().append(handler.to_doc()).nest(INDENT_SIZE))
+                    .append(RcDoc::line());
+
+                if rules.is_empty() {
+                    main
+                } else {
+                    let mut addition = RcDoc::text("where").append(RcDoc::line());
+                    for rule in rules {
+                        addition = addition.append(
+                            rule.input
+                                .to_doc()
+                                .append(RcDoc::space())
+                                .append(RcDoc::text("->"))
+                                .append(RcDoc::line())
+                                .append(rule.expected_output.to_doc())
+                                .append(RcDoc::text(";").group()),
+                        );
+                    }
+                    main.append(addition)
+                }
+                .append(RcDoc::text("end"))
+            }
             Statement::Comment(c) => RcDoc::as_string(format!("#{c}")),
             Statement::NewLine => RcDoc::text(""),
         }
@@ -86,7 +106,7 @@ pub fn pretty_file(statements: &[Statement]) -> String {
     let mut w = Vec::new();
     let mut last = None;
     for statement in statements {
-        if matches!(statement, Statement::Def(_, _, _))
+        if matches!(statement, Statement::Def(_, _, _, _))
             && !matches!(
                 last,
                 Some(&Statement::Comment(_)) | Some(Statement::NewLine)
