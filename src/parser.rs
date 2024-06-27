@@ -434,6 +434,24 @@ fn parse_partial_expression(
                     Box::new(next),
                 ))
             }
+            Token::LParen => {
+                let Some(t) = tokens.next() else {
+                    return Err(ParsingError {
+                        err_type: ParsingErrorType::UnexpectedEOF,
+                        start: t.end,
+                        end: t.end,
+                    });
+                };
+                if t.contents == Token::RParen {
+                    Ok(Expression::Empty)
+                } else {
+                    Err(ParsingError {
+                        err_type: ParsingErrorType::ExpectedToken(Token::RParen, t.contents),
+                        start: t.start,
+                        end: t.end,
+                    })
+                }
+            }
             Token::Dollars => {
                 // ident
                 let Some(ident) = tokens.next() else {
