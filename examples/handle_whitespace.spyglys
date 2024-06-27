@@ -3,6 +3,10 @@ let main = '(?<main>\S(.*\S)?)';
 
 def trim ('^' + whitespace + main + whitespace + '$'):
     main
+where
+   "   hi  " -> "hi";
+   "   space inside  " -> "space inside";
+   "" -> ();
 end
 
 def trim_left ('^' + whitespace + main):
