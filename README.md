@@ -83,7 +83,7 @@ end
 Functions can also be recursive. This function will naively recursively transform xml/html into its equivelant s-expression.
 ```ruby
 def parse_html ('<(?<tag>\w+)>(?<inner>(?<inner_html><.+)|.+)?</(?<secondtag>\w+)>'):
-    "(" + tag + $map(inner, " ") + $map(inner, $if_else(inner_html, recursive_example(inner), inner)) + ")"
+    "(" + tag + $map(inner, " ") + $map(inner, $if_else(inner_html, parse_html(inner), inner)) + ")"
 end
 ```
 
