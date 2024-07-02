@@ -83,14 +83,15 @@ impl Statement {
                 if rules.is_empty() {
                     main
                 } else {
-                    let mut addition =
-                        RcDoc::text("where")
-                            .append(RcDoc::line())
-                            .append(RcDoc::intersperse(
-                                rules.iter().map(|r| r.to_doc()),
-                                RcDoc::line(),
-                            ));
-                    main.append(addition)
+                    let where_section = RcDoc::text("where")
+                        .append(RcDoc::line())
+                        .append(RcDoc::intersperse(
+                            rules.iter().map(|r| r.to_doc()),
+                            RcDoc::line(),
+                        ))
+                        .nest(INDENT_SIZE)
+                        .append(RcDoc::line());
+                    main.append(where_section)
                 }
                 .append(RcDoc::text("end"))
             }
@@ -103,14 +104,37 @@ impl Statement {
 
 impl TestRule {
     pub fn to_doc(&self) -> RcDoc<()> {
-        self.input
+        let test_body = self
+            .input
             .to_doc()
             .append(RcDoc::space())
             .append(RcDoc::text("->"))
-            .append(RcDoc::line())
-            .append(self.expected_output.to_doc())
-            .append(RcDoc::text(";"))
-            .group()
+            .append(
+                RcDoc::line()
+                    .append(self.expected_output.to_doc())
+                    .nest(INDENT_SIZE),
+            );
+
+        if self.for_vars.is_empty() {
+            test_body
+        } else {
+            test_body.append(
+                RcDoc::line()
+                    .append(
+                        RcDoc::text("for")
+                            .append(RcDoc::space())
+                            .append(RcDoc::text(&self.for_vars[0].0))
+                            .append(RcDoc::space())
+                            .append(RcDoc::text("in"))
+                            .append(RcDoc::space())
+                            .append(self.for_vars[0].1.to_doc())
+                            .group(),
+                    )
+                    .nest(INDENT_SIZE),
+            )
+        }
+        .append(RcDoc::text(";"))
+        .group()
     }
 }
 
