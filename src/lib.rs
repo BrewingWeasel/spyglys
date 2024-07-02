@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use interpreter::{CompileTimeError, Interpreter, RuntimeError, Statement, Type, Value};
+use interpreter::{CompileTimeError, Interpreter, RuntimeError, Statement, Value};
 use parser::{Lexer, LexingError, LexingErrorType, ParsingError, ParsingErrorType, Token};
 
 pub mod formatter;
@@ -53,14 +53,14 @@ impl Display for SpyglysError {
                         "Test for function {fun} failed (`{:?}` did not match `{:?}`)",
                         matcher, handler
                     ),
-                    CompileTimeError::IncorrectTestType(fun, v) => write!(
+                    CompileTimeError::IncorrectTestType(fun, val, val_type) => write!(
                         f,
-                        "Test for function {fun} had an incorrect type: value {v} (type: {:?})",
-                        std::convert::Into::<Type>::into(v.clone())
+                        "Test for function {fun} had an incorrect type: value {val} (type: {val_type:?})",
                     ),
                     CompileTimeError::RuntimeErrorInTest(fun, e) => {
                         write!(f, "Runtime error in test for {fun}: {e}")
                     }
+                    CompileTimeError::TypeError(e) => write!(f, "Type error: {e}"),
                 }
             }
             Self::Runtime(r) => {

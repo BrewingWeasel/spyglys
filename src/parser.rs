@@ -14,6 +14,8 @@ pub enum Token {
     Eof,
     LParen,
     RParen,
+    LBracket,
+    RBracket,
     Plus,
     QuestionMark,
     Dollars,
@@ -42,6 +44,8 @@ impl Display for Token {
             Token::Eof => write!(f, ""),
             Token::LParen => write!(f, "("),
             Token::RParen => write!(f, ")"),
+            Token::LBracket => write!(f, "["),
+            Token::RBracket => write!(f, "]"),
             Token::Plus => write!(f, "+"),
             Token::Equals => write!(f, "="),
             Token::Comma => write!(f, ","),
@@ -155,6 +159,8 @@ impl<'input> Iterator for Lexer<'input> {
         let token = match next {
             '(' => Token::LParen,
             ')' => Token::RParen,
+            '[' => Token::LBracket,
+            ']' => Token::RBracket,
             '+' => Token::Plus,
             '?' => Token::QuestionMark,
             '$' => Token::Dollars,
@@ -451,6 +457,26 @@ fn parse_partial_expression(
                         end: t.end,
                     })
                 }
+            }
+            Token::LBracket => {
+                let mut contents = Vec::new();
+                while let Some(t) = tokens.peek() {
+                    if t.contents == Token::RBracket {
+                        tokens.next();
+                        break;
+                    }
+                    contents.push(parse_expression(tokens, &[Token::Comma, Token::RParen])?);
+                    if matches!(
+                        tokens.peek(),
+                        Some(Spanned {
+                            contents: Token::Comma,
+                            ..
+                        }),
+                    ) {
+                        tokens.next();
+                    }
+                }
+                Ok(Expression::Iterator(contents))
             }
             Token::Dollars => {
                 // ident

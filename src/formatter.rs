@@ -33,6 +33,13 @@ impl Expression {
                 .append(RcDoc::text("+"))
                 .append(RcDoc::line().append(expr2.to_doc()).group()),
             Expression::Empty => RcDoc::text("()"),
+            Expression::Iterator(v) => RcDoc::text("[")
+                .append(RcDoc::intersperse(
+                    v.iter().map(|v| v.to_doc().append(RcDoc::text(","))),
+                    RcDoc::line(),
+                ))
+                .append(RcDoc::text("]"))
+                .group(),
         }
     }
 }

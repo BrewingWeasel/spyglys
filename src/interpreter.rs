@@ -11,6 +11,7 @@ pub enum Expression {
     Empty,
     Call(String, Box<Expression>),
     Builtin(String, Vec<Box<Expression>>),
+    Iterator(Vec<Expression>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,6 +33,7 @@ pub enum Value {
     Str(String),
     Regex(String),
     Empty,
+    Iterator(Vec<Expression>),
 }
 
 impl Display for Value {
@@ -40,6 +42,18 @@ impl Display for Value {
             Self::Empty => write!(f, "()"),
             Self::Regex(r) => write!(f, "'{}'", r),
             Self::Str(s) => write!(f, "\"{}\"", s),
+            Self::Iterator(exprs) => write!(
+                f,
+                "[{}]",
+                exprs.iter().fold(String::new(), |mut acc, e| {
+                    let mut expr_str = Vec::new();
+                    e.to_doc()
+                        .render(80, &mut expr_str)
+                        .expect("rendering to work");
+                    acc.push_str(&String::from_utf8(expr_str).unwrap());
+                    acc
+                })
+            ),
         }
     }
 }
@@ -49,16 +63,7 @@ pub enum Type {
     Str,
     Regex,
     Empty,
-}
-
-impl From<Value> for Type {
-    fn from(value: Value) -> Self {
-        match value {
-            Value::Empty => Type::Empty,
-            Value::Regex(_) => Type::Regex,
-            Value::Str(_) => Type::Str,
-        }
-    }
+    Iterator(Option<Box<Type>>),
 }
 
 #[derive(Default)]
@@ -84,7 +89,8 @@ pub enum RuntimeErrorType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeErrorType {
     Adding(Type, Type),
-    ExpectedType(Type, Value),
+    ExpectedType(Type, Value, Type),
+    NonExistentVariable,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,7 +103,28 @@ pub struct RuntimeError {
 pub enum CompileTimeError {
     TestFailed(String, Value, Value),
     RuntimeErrorInTest(String, RuntimeError),
-    IncorrectTestType(String, Value),
+    IncorrectTestType(String, Value, Type),
+    TypeError(TypeErrorType),
+}
+
+impl Display for TypeErrorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TypeErrorType::Adding(t1, t2) => {
+                write!(f, "Cannot add types {:?} and {:?}", t1, t2)
+            }
+            TypeErrorType::ExpectedType(t, got, got_type) => {
+                write!(
+                    f,
+                    "Expected type {:?}; got {:?} (type {:?})",
+                    t, got, got_type
+                )
+            }
+            TypeErrorType::NonExistentVariable => {
+                write!(f, "Unable to find variable when determining type")
+            }
+        }
+    }
 }
 
 impl Display for RuntimeError {
@@ -111,21 +138,7 @@ impl Display for RuntimeError {
         )?;
         match &self.error_type {
             RuntimeErrorType::TypeError(t) => {
-                write!(f, "(type error) ")?;
-                match t {
-                    TypeErrorType::Adding(t1, t2) => {
-                        write!(f, "Cannot add types {:?} and {:?}", t1, t2)
-                    }
-                    TypeErrorType::ExpectedType(t, got) => {
-                        write!(
-                            f,
-                            "Expected type {:?}; got {:?} (type {:?})",
-                            t,
-                            got,
-                            std::convert::Into::<Type>::into(got.clone())
-                        )
-                    }
-                }
+                write!(f, "(type error) {t}")
             }
             RuntimeErrorType::WrongNumberOfArgs(expected, got) => write!(
                 f,
@@ -168,14 +181,21 @@ impl Interpreter {
                     (v1, v2) => Err(RuntimeError {
                         when_evaluating: expr.clone(),
                         error_type: RuntimeErrorType::TypeError(TypeErrorType::Adding(
-                            v1.into(),
-                            v2.into(),
+                            self.value_to_type(&v1).map_err(|error_type| RuntimeError {
+                                when_evaluating: *e1.to_owned(),
+                                error_type: RuntimeErrorType::TypeError(error_type),
+                            })?,
+                            self.value_to_type(&v2).map_err(|error_type| RuntimeError {
+                                when_evaluating: *e2.to_owned(),
+                                error_type: RuntimeErrorType::TypeError(error_type),
+                            })?,
                         )),
                     }),
                 }
             }
             Expression::Regex(r) => Ok(Value::Regex((*r).to_owned())),
             Expression::String(s) => Ok(Value::Str((*s).to_owned())),
+            Expression::Iterator(xs) => Ok(Value::Iterator(xs.to_owned())),
             Expression::Variable(var) => {
                 if let Some(scopes) = additional {
                     for scope in scopes.iter().rev() {
@@ -193,16 +213,23 @@ impl Interpreter {
                 })
             }
             Expression::Empty => Ok(Value::Empty),
-            Expression::Call(func, expr) => {
-                let call_value = self.eval(expr, additional)?;
+            Expression::Call(func, argument_expr) => {
+                let call_value = self.eval(argument_expr, additional)?;
                 if let Value::Str(input) = call_value {
                     self.run_function(func, &input)
                 } else {
+                    let call_type =
+                        self.value_to_type(&call_value)
+                            .map_err(|error_type| RuntimeError {
+                                when_evaluating: *argument_expr.to_owned(),
+                                error_type: RuntimeErrorType::TypeError(error_type),
+                            })?;
                     Err(RuntimeError {
-                        when_evaluating: *expr.clone(),
+                        when_evaluating: *argument_expr.clone(),
                         error_type: RuntimeErrorType::TypeError(TypeErrorType::ExpectedType(
                             Type::Str,
                             call_value,
+                            call_type,
                         )),
                     })
                 }
@@ -282,6 +309,49 @@ impl Interpreter {
         }
     }
 
+    pub fn expression_to_type(&self, expr: &Expression) -> Result<Type, TypeErrorType> {
+        match expr {
+            Expression::Empty => Ok(Type::Empty),
+            Expression::String(_) => Ok(Type::Str),
+            Expression::Regex(_) => Ok(Type::Regex),
+            Expression::Plus(e, _) => self.expression_to_type(&e),
+            Expression::Iterator(conts) => {
+                if let Some(expr) = conts.first() {
+                    Ok(Type::Iterator(Some(Box::new(
+                        self.expression_to_type(expr)?,
+                    ))))
+                } else {
+                    Ok(Type::Iterator(None))
+                }
+            }
+            Expression::Call(_, _) => Ok(Type::Str),
+            Expression::Variable(var) => self
+                .scope
+                .variables
+                .get(var)
+                .map(|v| self.value_to_type(v))
+                .ok_or(TypeErrorType::NonExistentVariable)?,
+            Expression::Builtin(_, _) => todo!(),
+        }
+    }
+
+    fn value_to_type(&self, value: &Value) -> Result<Type, TypeErrorType> {
+        match value {
+            Value::Empty => Ok(Type::Empty),
+            Value::Regex(_) => Ok(Type::Regex),
+            Value::Str(_) => Ok(Type::Str),
+            Value::Iterator(conts) => {
+                if let Some(expr) = conts.first() {
+                    Ok(Type::Iterator(Some(Box::new(
+                        self.expression_to_type(expr)?,
+                    ))))
+                } else {
+                    Ok(Type::Iterator(None))
+                }
+            }
+        }
+    }
+
     pub fn run_tests(&self) -> Result<(), CompileTimeError> {
         for (func, (matcher, handler, tests)) in &self.scope.functions {
             for test in tests {
@@ -289,9 +359,13 @@ impl Interpreter {
                     .eval(&test.input, None)
                     .map_err(|e| CompileTimeError::RuntimeErrorInTest(func.to_owned(), e))?;
                 let Value::Str(input) = input_value else {
+                    let input_type = self
+                        .value_to_type(&input_value)
+                        .map_err(CompileTimeError::TypeError)?;
                     return Err(CompileTimeError::IncorrectTestType(
                         func.to_owned(),
                         input_value,
+                        input_type,
                     ));
                 };
 
@@ -354,11 +428,18 @@ impl Interpreter {
     ) -> Result<Value, RuntimeError> {
         let matched = self.eval(matcher, None)?;
         let Value::Regex(regex_matching) = matched else {
+            let matched_type = self
+                .value_to_type(&matched)
+                .map_err(|error_type| RuntimeError {
+                    when_evaluating: matcher.to_owned(),
+                    error_type: RuntimeErrorType::TypeError(error_type),
+                })?;
             return Err(RuntimeError {
                 when_evaluating: matcher.clone(),
                 error_type: RuntimeErrorType::TypeError(TypeErrorType::ExpectedType(
                     Type::Regex,
                     matched,
+                    matched_type,
                 )),
             });
         };
@@ -391,11 +472,18 @@ impl Interpreter {
         if let Value::Str(_) = handled {
             Ok(handled)
         } else {
+            let handled_type = self
+                .value_to_type(&handled)
+                .map_err(|error_type| RuntimeError {
+                    when_evaluating: handler.to_owned(),
+                    error_type: RuntimeErrorType::TypeError(error_type),
+                })?;
             Err(RuntimeError {
-                when_evaluating: matcher.clone(),
+                when_evaluating: handler.to_owned(),
                 error_type: RuntimeErrorType::TypeError(TypeErrorType::ExpectedType(
                     Type::Str,
                     handled,
+                    handled_type,
                 )),
             })
         }
