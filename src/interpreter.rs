@@ -29,6 +29,20 @@ pub struct TestRule {
     pub for_vars: Vec<(String, Expression)>,
 }
 
+impl Display for TestRule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut expr_str = Vec::new();
+        self.to_doc()
+            .render(80, &mut expr_str)
+            .expect("rendering to work");
+        write!(
+            f,
+            "{}",
+            &String::from_utf8(expr_str).expect("formatting to generate valid utf8")
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Value {
     Str(String),
@@ -192,7 +206,7 @@ macro_rules! compile_time_error {
         CompileTimeError {
             error_type: $expr,
             in_function: $func.to_owned(),
-            in_test: format!("{:?}", $test),
+            in_test: $test.to_string(),
         }
     };
 }
@@ -202,14 +216,14 @@ macro_rules! try_or_compile_time_error {
         $expr.map_err(|e| CompileTimeError {
             error_type: CompileTimeErrorType::RuntimeErrorInTest(e),
             in_function: $func.to_owned(),
-            in_test: format!("{:?}", $test),
+            in_test: $test.to_string(),
         })?
     };
     ($expr:expr, $func:ident, $test:ident, $handler:expr) => {
         $expr.map_err(|e| CompileTimeError {
             error_type: $handler(e),
             in_function: $func.to_owned(),
-            in_test: format!("{:?}", $test),
+            in_test: $test.to_string(),
         })?
     };
 }

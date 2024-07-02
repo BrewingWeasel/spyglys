@@ -1,6 +1,6 @@
 use pretty::RcDoc;
 
-use crate::interpreter::{Expression, Statement};
+use crate::interpreter::{Expression, Statement, TestRule};
 
 impl Expression {
     pub fn to_doc(&self) -> RcDoc<()> {
@@ -83,18 +83,13 @@ impl Statement {
                 if rules.is_empty() {
                     main
                 } else {
-                    let mut addition = RcDoc::text("where").append(RcDoc::line());
-                    for rule in rules {
-                        addition = addition.append(
-                            rule.input
-                                .to_doc()
-                                .append(RcDoc::space())
-                                .append(RcDoc::text("->"))
-                                .append(RcDoc::line())
-                                .append(rule.expected_output.to_doc())
-                                .append(RcDoc::text(";").group()),
-                        );
-                    }
+                    let mut addition =
+                        RcDoc::text("where")
+                            .append(RcDoc::line())
+                            .append(RcDoc::intersperse(
+                                rules.iter().map(|r| r.to_doc()),
+                                RcDoc::line(),
+                            ));
                     main.append(addition)
                 }
                 .append(RcDoc::text("end"))
@@ -103,6 +98,19 @@ impl Statement {
             Self::NewLine => RcDoc::text(""),
         }
         .append(RcDoc::line())
+    }
+}
+
+impl TestRule {
+    pub fn to_doc(&self) -> RcDoc<()> {
+        self.input
+            .to_doc()
+            .append(RcDoc::space())
+            .append(RcDoc::text("->"))
+            .append(RcDoc::line())
+            .append(self.expected_output.to_doc())
+            .append(RcDoc::text(";"))
+            .group()
     }
 }
 
