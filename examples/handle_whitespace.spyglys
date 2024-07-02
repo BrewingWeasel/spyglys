@@ -6,23 +6,27 @@ let main_right = '(?<main>(.*)?\S)';
 def trim ('^' + whitespace + main + whitespace + '$'):
     main
 where
-   "   inner  " -> "inner";
-   "   space inside  " -> "space inside";
-   "" -> ();
-   "     " -> ();
-   ws + "inner" + ws -> "inner" for ws in ["  ", " ", "",];
-   " " + ending -> ending for ending in ["e", ";", "ending",];
-   starting + "   " -> starting for starting in ["s", ";", "starting", "",];
+    "   inner  " -> "inner";
+    "   space inside  " -> "space inside";
+    "" -> ();
+    "     " -> ();
+    ws + "inner" + ws -> "inner" for ws in ["  ", " ", "",];
+    " " + ending -> ending for ending in ["e", ";", "ending",];
+    starting + "   " -> starting for starting in ["s", ";", "starting",];
 end
 
 def trim_left ('^' + whitespace + main_anything):
     main
-where 
-   whitespace + "inner" + whitespace -> "inner" + whitespace for whitespace in ["  ", " ", "",];
+where
+    whitespace + "inner" + whitespace ->
+        "inner" + whitespace
+        for whitespace in ["  ", " ", "",];
 end
 
 def trim_right (main_right + whitespace + '$'):
     main
 where
-   whitespace + "inner" + whitespace -> whitespace + "inner" for whitespace in ["  ", " ", "",];
+    whitespace + "inner" + whitespace ->
+        whitespace + "inner"
+        for whitespace in ["  ", " ", "",];
 end
