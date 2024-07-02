@@ -498,7 +498,7 @@ fn parse_partial_expression(
                         tokens.next();
                         break;
                     }
-                    contents.push(parse_expression(tokens, &[Token::Comma, Token::RParen])?);
+                    contents.push(parse_expression(tokens, &[Token::Comma, Token::RBracket])?);
                     if matches!(
                         tokens.peek(),
                         Some(Spanned {
