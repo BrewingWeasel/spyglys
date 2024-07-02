@@ -1,0 +1,9 @@
+---
+source: src/parser.rs
+expression: "parse_expression(&mut tokens, &[Token::Eof])"
+---
+Ok(
+    Iterator(
+        [],
+    ),
+)

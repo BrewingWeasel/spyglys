@@ -1,0 +1,38 @@
+---
+source: src/parser.rs
+expression: parse_statement(&mut tokens)
+---
+Ok(
+    Def(
+        "do_thing",
+        Regex(
+            "hi (?<name>.*)",
+        ),
+        Plus(
+            String(
+                "hello ",
+            ),
+            Variable(
+                "name",
+            ),
+        ),
+        [
+            TestRule {
+                input: String(
+                    "hi joe",
+                ),
+                expected_output: String(
+                    "hello joe",
+                ),
+                for_vars: [],
+            },
+            TestRule {
+                input: String(
+                    "hey john",
+                ),
+                expected_output: Empty,
+                for_vars: [],
+            },
+        ],
+    ),
+)

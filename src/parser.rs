@@ -626,6 +626,24 @@ mod test {
     }
 
     #[test]
+    fn test_parsing_iterator_no_trailing_comma() {
+        let mut tokens = Lexer::new(r#"["hi", variable, "hello " + "there"]"#).peekable();
+        insta::assert_debug_snapshot!(parse_expression(&mut tokens, &[Token::Eof]))
+    }
+
+    #[test]
+    fn test_parsing_iterator_trailing_comma() {
+        let mut tokens = Lexer::new(r#"["hi", variable, "hello " + "there",]"#).peekable();
+        insta::assert_debug_snapshot!(parse_expression(&mut tokens, &[Token::Eof]))
+    }
+
+    #[test]
+    fn test_parsing_iterator_empty() {
+        let mut tokens = Lexer::new("[]").peekable();
+        insta::assert_debug_snapshot!(parse_expression(&mut tokens, &[Token::Eof]))
+    }
+
+    #[test]
     fn test_parsing_adding_strings() {
         let mut tokens = Lexer::new(r#" "pirmas" + "antras" "#).peekable();
         insta::assert_debug_snapshot!(parse_expression(&mut tokens, &[Token::Eof]))
@@ -637,6 +655,37 @@ mod test {
             r#"
 def do_thing('hi (?<name>.*)'):
     "hello " + name
+end
+"#,
+        )
+        .peekable();
+        insta::assert_debug_snapshot!(parse_statement(&mut tokens))
+    }
+
+    #[test]
+    fn test_parsing_simple_function_where() {
+        let mut tokens = Lexer::new(
+            r#"
+def do_thing('hi (?<name>.*)'):
+    "hello " + name
+where
+    "hi joe" -> "hello joe";
+    "hey john" -> ();
+end
+"#,
+        )
+        .peekable();
+        insta::assert_debug_snapshot!(parse_statement(&mut tokens))
+    }
+
+    #[test]
+    fn test_parsing_function_where_loop() {
+        let mut tokens = Lexer::new(
+            r#"
+def do_thing('hi (?<name>.*)'):
+    "hello " + name
+where
+    "hi " + name -> "hello " + name for name in ["Elisa", "Jonas", "Hubert Blaine Wolfeschlegelsteinhausenbergerdorff"];
 end
 "#,
         )
