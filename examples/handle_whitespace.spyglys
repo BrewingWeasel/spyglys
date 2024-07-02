@@ -1,18 +1,28 @@
 let whitespace = '\s*';
 let main = '(?<main>\S(.*\S)?)';
+let main_anything = '(?<main>.*)';
+let main_right = '(?<main>(.*)?\S)';
 
 def trim ('^' + whitespace + main + whitespace + '$'):
     main
 where
-   "   hi  " -> "hi";
+   "   inner  " -> "inner";
    "   space inside  " -> "space inside";
    "" -> ();
+   "     " -> ();
+   ws + "inner" + ws -> "inner" for ws in ["  ", " ", "",];
+   " " + ending -> ending for ending in ["e", ";", "ending",];
+   starting + "   " -> starting for starting in ["s", ";", "starting", "",];
 end
 
-def trim_left ('^' + whitespace + main):
+def trim_left ('^' + whitespace + main_anything):
     main
+where 
+   whitespace + "inner" + whitespace -> "inner" + whitespace for whitespace in ["  ", " ", "",];
 end
 
-def trim_right (main + whitespace + '$'):
+def trim_right (main_right + whitespace + '$'):
     main
+where
+   whitespace + "inner" + whitespace -> whitespace + "inner" for whitespace in ["  ", " ", "",];
 end
