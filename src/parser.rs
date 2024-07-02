@@ -30,9 +30,10 @@ pub enum Token {
     Comment(String),
     NewLine,
     End,
+    For,
+    In,
     // RESERVED (not all)
     Where,
-    For,
     When,
     Rule,
     Arrow,
@@ -61,6 +62,7 @@ impl Display for Token {
             Self::End => write!(f, "end"),
             Self::Where => write!(f, "where"),
             Self::For => write!(f, "for"),
+            Self::In => write!(f, "in"),
             Self::When => write!(f, "when"),
             Self::Rule => write!(f, "rule"),
             Self::Comment(c) => write!(f, "#{c}"),
@@ -219,6 +221,8 @@ impl<'input> Iterator for Lexer<'input> {
                     "where" => Token::Where,
                     "when" => Token::When,
                     "rule" => Token::Rule,
+                    "for" => Token::For,
+                    "in" => Token::In,
                     _ => Token::Ident(conts),
                 }
             }
@@ -348,12 +352,41 @@ pub fn parse_statement(tokens: &mut Peekable<Lexer>) -> Result<Statement, Parsin
                         }
                         let input = parse_expression(tokens, &[Token::Arrow])?;
                         tokens.next();
-                        let expected_output = parse_expression(tokens, &[Token::Semicolon])?;
+                        let expected_output =
+                            parse_expression(tokens, &[Token::Semicolon, Token::For])?;
+                        let mut for_vars = Vec::new();
+                        if matches!(
+                            tokens.next(),
+                            Some(Spanned {
+                                contents: Token::For,
+                                ..
+                            })
+                        ) {
+                            let Some(possible_var) = tokens.next() else {
+                                todo!()
+                            };
+                            let Token::Ident(var_name) = possible_var.contents else {
+                                todo!()
+                            };
+                            if !matches!(
+                                tokens.next(),
+                                Some(Spanned {
+                                    contents: Token::In,
+                                    ..
+                                })
+                            ) {
+                                todo!()
+                            }
+                            let variable_value_options =
+                                parse_expression(tokens, &[Token::Semicolon])?;
+                            tokens.next();
+                            for_vars.push((var_name, variable_value_options))
+                        }
                         rules.push(TestRule {
                             input,
                             expected_output,
+                            for_vars,
                         });
-                        tokens.next();
                     }
                 }
                 Ok(Statement::Def(func_name, matching, handler, rules))

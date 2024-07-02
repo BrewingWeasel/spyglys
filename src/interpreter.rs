@@ -26,6 +26,7 @@ pub enum Statement {
 pub struct TestRule {
     pub input: Expression,
     pub expected_output: Expression,
+    pub for_vars: Vec<(String, Expression)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -355,35 +356,88 @@ impl Interpreter {
     pub fn run_tests(&self) -> Result<(), CompileTimeError> {
         for (func, (matcher, handler, tests)) in &self.scope.functions {
             for test in tests {
-                let input_value = self
-                    .eval(&test.input, None)
-                    .map_err(|e| CompileTimeError::RuntimeErrorInTest(func.to_owned(), e))?;
-                let Value::Str(input) = input_value else {
-                    let input_type = self
-                        .value_to_type(&input_value)
-                        .map_err(CompileTimeError::TypeError)?;
-                    return Err(CompileTimeError::IncorrectTestType(
-                        func.to_owned(),
-                        input_value,
-                        input_type,
-                    ));
-                };
-
-                let expected_value = self
-                    .eval(&test.expected_output, None)
-                    .map_err(|e| CompileTimeError::RuntimeErrorInTest(func.to_owned(), e))?;
-
-                let output = self
-                    .eval_function(matcher, handler, &input)
-                    .map_err(|e| CompileTimeError::RuntimeErrorInTest(func.to_owned(), e))?;
-                if output != expected_value {
-                    return Err(CompileTimeError::TestFailed(
-                        func.to_owned(),
-                        output,
-                        expected_value,
-                    ));
+                if test.for_vars.is_empty() {
+                    self.run_individual_test(
+                        func,
+                        &test.input,
+                        &test.expected_output,
+                        matcher,
+                        handler,
+                        None,
+                    )?;
+                } else {
+                    for (var, iterator_expr_for_values) in &test.for_vars {
+                        let Value::Iterator(all_variable_expressions) =
+                            self.eval(iterator_expr_for_values, None).map_err(|e| {
+                                CompileTimeError::RuntimeErrorInTest(func.to_owned(), e)
+                            })?
+                        else {
+                            todo!()
+                        };
+                        for specific_variable_expression in all_variable_expressions {
+                            let test_scope = Some(vec![Scope {
+                                variables: HashMap::from([(
+                                    var.to_owned(),
+                                    self.eval(&specific_variable_expression, None).map_err(
+                                        |e| {
+                                            CompileTimeError::RuntimeErrorInTest(func.to_owned(), e)
+                                        },
+                                    )?,
+                                )]),
+                                ..Default::default()
+                            }]);
+                            self.run_individual_test(
+                                func,
+                                &test.input,
+                                &test.expected_output,
+                                matcher,
+                                handler,
+                                test_scope.as_deref(),
+                            )?;
+                        }
+                    }
                 }
             }
+        }
+        Ok(())
+    }
+
+    fn run_individual_test(
+        &self,
+        func: &str,
+        test_input: &Expression,
+        test_expected_output: &Expression,
+        matcher: &Expression,
+        handler: &Expression,
+        test_scope: Option<&[Scope]>,
+    ) -> Result<(), CompileTimeError> {
+        let input_value = self
+            .eval(test_input, test_scope)
+            .map_err(|e| CompileTimeError::RuntimeErrorInTest(func.to_owned(), e))?;
+        let Value::Str(input) = input_value else {
+            let input_type = self
+                .value_to_type(&input_value)
+                .map_err(CompileTimeError::TypeError)?;
+            return Err(CompileTimeError::IncorrectTestType(
+                func.to_owned(),
+                input_value,
+                input_type,
+            ));
+        };
+
+        let expected_value = self
+            .eval(test_expected_output, test_scope)
+            .map_err(|e| CompileTimeError::RuntimeErrorInTest(func.to_owned(), e))?;
+
+        let output = self
+            .eval_function(matcher, handler, &input)
+            .map_err(|e| CompileTimeError::RuntimeErrorInTest(func.to_owned(), e))?;
+        if output != expected_value {
+            return Err(CompileTimeError::TestFailed(
+                func.to_owned(),
+                output,
+                expected_value,
+            ));
         }
         Ok(())
     }
