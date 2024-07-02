@@ -79,33 +79,10 @@ pub struct Scope {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RuntimeErrorType {
-    TypeError(TypeErrorType),
-    NonExistentVariable(String),
-    WrongNumberOfArgs(usize, usize),
-    NonExistentBuiltin(String),
-    NonExistentFunction(String),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeErrorType {
     Adding(Type, Type),
     ExpectedType(Type, Value, Type),
     NonExistentVariable,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RuntimeError {
-    pub when_evaluating: Expression,
-    pub error_type: RuntimeErrorType,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CompileTimeError {
-    TestFailed(String, Value, Value),
-    RuntimeErrorInTest(String, RuntimeError),
-    IncorrectTestType(String, Value, Type),
-    TypeError(TypeErrorType),
 }
 
 impl Display for TypeErrorType {
@@ -126,6 +103,21 @@ impl Display for TypeErrorType {
             }
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RuntimeErrorType {
+    TypeError(TypeErrorType),
+    NonExistentVariable(String),
+    WrongNumberOfArgs(usize, usize),
+    NonExistentBuiltin(String),
+    NonExistentFunction(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeError {
+    pub when_evaluating: Expression,
+    pub error_type: RuntimeErrorType,
 }
 
 impl Display for RuntimeError {
@@ -156,6 +148,70 @@ impl Display for RuntimeError {
             }
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompileTimeError {
+    pub in_function: String,
+    pub in_test: String,
+    pub error_type: CompileTimeErrorType,
+}
+
+impl Display for CompileTimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Compiletime error in function `{}`:
+in test `{}`:
+",
+            self.in_function, self.in_test
+        )?;
+        match &self.error_type {
+            CompileTimeErrorType::TypeError(t) => write!(f, "{t}"),
+            CompileTimeErrorType::RuntimeErrorInTest(t) => write!(f, "run time error in test: {t}"),
+            CompileTimeErrorType::TestFailed(expected, got) => {
+                write!(f, "expected value {expected} did not match {got}")
+            }
+            CompileTimeErrorType::IncorrectTestType(val, val_type) => {
+                write!(f, "incorrect type: value {val} (type: {val_type:?})",)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CompileTimeErrorType {
+    TestFailed(Value, Value),
+    RuntimeErrorInTest(RuntimeError),
+    IncorrectTestType(Value, Type),
+    TypeError(TypeErrorType),
+}
+
+macro_rules! compile_time_error {
+    ($expr:expr, $func:ident, $test:ident) => {
+        CompileTimeError {
+            error_type: $expr,
+            in_function: $func.to_owned(),
+            in_test: format!("{:?}", $test),
+        }
+    };
+}
+
+macro_rules! try_or_compile_time_error {
+    ($expr:expr, $func:ident, $test:ident) => {
+        $expr.map_err(|e| CompileTimeError {
+            error_type: CompileTimeErrorType::RuntimeErrorInTest(e),
+            in_function: $func.to_owned(),
+            in_test: format!("{:?}", $test),
+        })?
+    };
+    ($expr:expr, $func:ident, $test:ident, $handler:expr) => {
+        $expr.map_err(|e| CompileTimeError {
+            error_type: $handler(e),
+            in_function: $func.to_owned(),
+            in_test: format!("{:?}", $test),
+        })?
+    };
 }
 
 impl Interpreter {
@@ -357,39 +413,31 @@ impl Interpreter {
         for (func, (matcher, handler, tests)) in &self.scope.functions {
             for test in tests {
                 if test.for_vars.is_empty() {
-                    self.run_individual_test(
-                        func,
-                        &test.input,
-                        &test.expected_output,
-                        matcher,
-                        handler,
-                        None,
-                    )?;
+                    self.run_individual_test(func, test, matcher, handler, None)?;
                 } else {
                     for (var, iterator_expr_for_values) in &test.for_vars {
-                        let Value::Iterator(all_variable_expressions) =
-                            self.eval(iterator_expr_for_values, None).map_err(|e| {
-                                CompileTimeError::RuntimeErrorInTest(func.to_owned(), e)
-                            })?
-                        else {
+                        let Value::Iterator(all_variable_expressions) = try_or_compile_time_error!(
+                            self.eval(iterator_expr_for_values, None),
+                            func,
+                            test
+                        ) else {
                             todo!()
                         };
                         for specific_variable_expression in all_variable_expressions {
                             let test_scope = Some(vec![Scope {
                                 variables: HashMap::from([(
                                     var.to_owned(),
-                                    self.eval(&specific_variable_expression, None).map_err(
-                                        |e| {
-                                            CompileTimeError::RuntimeErrorInTest(func.to_owned(), e)
-                                        },
-                                    )?,
+                                    try_or_compile_time_error!(
+                                        self.eval(&specific_variable_expression, None),
+                                        func,
+                                        test
+                                    ),
                                 )]),
                                 ..Default::default()
                             }]);
                             self.run_individual_test(
                                 func,
-                                &test.input,
-                                &test.expected_output,
+                                test,
                                 matcher,
                                 handler,
                                 test_scope.as_deref(),
@@ -405,38 +453,37 @@ impl Interpreter {
     fn run_individual_test(
         &self,
         func: &str,
-        test_input: &Expression,
-        test_expected_output: &Expression,
+        test: &TestRule,
         matcher: &Expression,
         handler: &Expression,
         test_scope: Option<&[Scope]>,
     ) -> Result<(), CompileTimeError> {
-        let input_value = self
-            .eval(test_input, test_scope)
-            .map_err(|e| CompileTimeError::RuntimeErrorInTest(func.to_owned(), e))?;
+        let input_value =
+            try_or_compile_time_error!(self.eval(&test.input, test_scope), func, test);
         let Value::Str(input) = input_value else {
-            let input_type = self
-                .value_to_type(&input_value)
-                .map_err(CompileTimeError::TypeError)?;
-            return Err(CompileTimeError::IncorrectTestType(
-                func.to_owned(),
-                input_value,
-                input_type,
+            let input_type = try_or_compile_time_error!(
+                self.value_to_type(&input_value),
+                func,
+                test,
+                CompileTimeErrorType::TypeError
+            );
+            return Err(compile_time_error!(
+                CompileTimeErrorType::IncorrectTestType(input_value, input_type),
+                func,
+                test
             ));
         };
 
-        let expected_value = self
-            .eval(test_expected_output, test_scope)
-            .map_err(|e| CompileTimeError::RuntimeErrorInTest(func.to_owned(), e))?;
+        let expected_value =
+            try_or_compile_time_error!(self.eval(&test.expected_output, test_scope), func, test);
 
-        let output = self
-            .eval_function(matcher, handler, &input)
-            .map_err(|e| CompileTimeError::RuntimeErrorInTest(func.to_owned(), e))?;
+        let output =
+            try_or_compile_time_error!(self.eval_function(matcher, handler, &input), func, test);
         if output != expected_value {
-            return Err(CompileTimeError::TestFailed(
-                func.to_owned(),
-                output,
-                expected_value,
+            return Err(compile_time_error!(
+                CompileTimeErrorType::TestFailed(output, expected_value,),
+                func,
+                test
             ));
         }
         Ok(())

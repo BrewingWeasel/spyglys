@@ -46,22 +46,7 @@ impl Display for SpyglysError {
                 }
             }
             Self::CompileTime(e) => {
-                write!(f, "Compiletime error: ")?;
-                match e {
-                    CompileTimeError::TestFailed(fun, matcher, handler) => write!(
-                        f,
-                        "Test for function {fun} failed (`{:?}` did not match `{:?}`)",
-                        matcher, handler
-                    ),
-                    CompileTimeError::IncorrectTestType(fun, val, val_type) => write!(
-                        f,
-                        "Test for function {fun} had an incorrect type: value {val} (type: {val_type:?})",
-                    ),
-                    CompileTimeError::RuntimeErrorInTest(fun, e) => {
-                        write!(f, "Runtime error in test for {fun}: {e}")
-                    }
-                    CompileTimeError::TypeError(e) => write!(f, "Type error: {e}"),
-                }
+                write!(f, "Compiletime error: {e}")
             }
             Self::Runtime(r) => {
                 write!(f, "{r}")
