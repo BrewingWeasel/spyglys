@@ -5,10 +5,10 @@ use crate::interpreter::{Expression, Statement};
 impl Expression {
     pub fn to_doc(&self) -> RcDoc<()> {
         match self {
-            Expression::String(x) => RcDoc::as_string(format!("\"{x}\"")),
-            Expression::Regex(x) => RcDoc::as_string(format!("'{x}'")),
-            Expression::Variable(x) => RcDoc::as_string(x),
-            Expression::Call(func, arg) => RcDoc::as_string(format!("{func}("))
+            Self::String(x) => RcDoc::as_string(format!("\"{x}\"")),
+            Self::Regex(x) => RcDoc::as_string(format!("'{x}'")),
+            Self::Variable(x) => RcDoc::as_string(x),
+            Self::Call(func, arg) => RcDoc::as_string(format!("{func}("))
                 .append(
                     RcDoc::softline()
                         .append(arg.to_doc())
@@ -16,7 +16,7 @@ impl Expression {
                         .group(),
                 )
                 .append(RcDoc::text(")")),
-            Expression::Builtin(func, args) => RcDoc::as_string(format!("${func}("))
+            Self::Builtin(func, args) => RcDoc::as_string(format!("${func}("))
                 .append(
                     RcDoc::intersperse(
                         args.iter().map(|x| x.to_doc().append(RcDoc::text(","))),
@@ -27,13 +27,13 @@ impl Expression {
                     .group(),
                 )
                 .append(RcDoc::text(")")),
-            Expression::Plus(expr1, expr2) => expr1
+            Self::Plus(expr1, expr2) => expr1
                 .to_doc()
                 .append(RcDoc::space())
                 .append(RcDoc::text("+"))
                 .append(RcDoc::line().append(expr2.to_doc()).group()),
-            Expression::Empty => RcDoc::text("()"),
-            Expression::Iterator(v) => RcDoc::text("[")
+            Self::Empty => RcDoc::text("()"),
+            Self::Iterator(v) => RcDoc::text("[")
                 .append(RcDoc::intersperse(
                     v.iter().map(|v| v.to_doc().append(RcDoc::text(","))),
                     RcDoc::line(),
@@ -47,7 +47,7 @@ impl Expression {
 impl Statement {
     pub fn to_doc(&self) -> RcDoc<()> {
         match self {
-            Statement::Let(var, contents) => RcDoc::text("let")
+            Self::Let(var, contents) => RcDoc::text("let")
                 .append(RcDoc::line())
                 .append(RcDoc::text(var))
                 .append(RcDoc::space())
@@ -61,7 +61,7 @@ impl Statement {
                 )
                 .nest(INDENT_SIZE)
                 .group(),
-            Statement::Def(func, matcher, handler, rules) => {
+            Self::Def(func, matcher, handler, rules) => {
                 let main = RcDoc::text("def")
                     .append(RcDoc::space())
                     .append(RcDoc::text(func))
@@ -99,8 +99,8 @@ impl Statement {
                 }
                 .append(RcDoc::text("end"))
             }
-            Statement::Comment(c) => RcDoc::as_string(format!("#{c}")),
-            Statement::NewLine => RcDoc::text(""),
+            Self::Comment(c) => RcDoc::as_string(format!("#{c}")),
+            Self::NewLine => RcDoc::text(""),
         }
         .append(RcDoc::line())
     }

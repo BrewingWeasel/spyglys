@@ -110,17 +110,17 @@ pub enum CompileTimeError {
 impl Display for TypeErrorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TypeErrorType::Adding(t1, t2) => {
+            Self::Adding(t1, t2) => {
                 write!(f, "Cannot add types {:?} and {:?}", t1, t2)
             }
-            TypeErrorType::ExpectedType(t, got, got_type) => {
+            Self::ExpectedType(t, got, got_type) => {
                 write!(
                     f,
                     "Expected type {:?}; got {:?} (type {:?})",
                     t, got, got_type
                 )
             }
-            TypeErrorType::NonExistentVariable => {
+            Self::NonExistentVariable => {
                 write!(f, "Unable to find variable when determining type")
             }
         }
@@ -314,7 +314,7 @@ impl Interpreter {
             Expression::Empty => Ok(Type::Empty),
             Expression::String(_) => Ok(Type::Str),
             Expression::Regex(_) => Ok(Type::Regex),
-            Expression::Plus(e, _) => self.expression_to_type(&e),
+            Expression::Plus(e, _) => self.expression_to_type(e),
             Expression::Iterator(conts) => {
                 if let Some(expr) = conts.first() {
                     Ok(Type::Iterator(Some(Box::new(
