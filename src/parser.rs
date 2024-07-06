@@ -169,10 +169,15 @@ impl<'input> Iterator for Lexer<'input> {
             ',' => Token::Comma,
             '=' => Token::Equals,
             ';' => Token::Semicolon,
-            '-' => match self.next_char() {
-                Some('>') => Token::Arrow,
-                _ => todo!(),
-            },
+            '-' => {
+                if self.next_char() != Some('>') {
+                    self.errors.push(LexingError {
+                        err_type: LexingErrorType::UnexpectedChar('-'),
+                        position: self.position,
+                    });
+                }
+                Token::Arrow
+            }
             '#' => {
                 let mut conts = String::new();
                 while let Some(c) = self.peek_char() {
@@ -355,27 +360,53 @@ pub fn parse_statement(tokens: &mut Peekable<Lexer>) -> Result<Statement, Parsin
                         let expected_output =
                             parse_expression(tokens, &[Token::Semicolon, Token::For])?;
                         let mut for_vars = Vec::new();
+                        let next = tokens.next();
                         if matches!(
-                            tokens.next(),
+                            next,
                             Some(Spanned {
                                 contents: Token::For,
                                 ..
                             })
                         ) {
                             let Some(possible_var) = tokens.next() else {
-                                todo!()
+                                let ending = next.expect("already matched").end;
+                                return Err(ParsingError {
+                                    err_type: ParsingErrorType::UnexpectedEOF,
+                                    start: ending,
+                                    end: ending,
+                                });
                             };
                             let Token::Ident(var_name) = possible_var.contents else {
-                                todo!()
+                                return Err(ParsingError {
+                                    err_type: ParsingErrorType::ExpectedIdent(
+                                        possible_var.contents,
+                                    ),
+                                    start: possible_var.start,
+                                    end: possible_var.end,
+                                });
+                            };
+                            let Some(in_token) = tokens.next() else {
+                                return Err(ParsingError {
+                                    err_type: ParsingErrorType::UnexpectedEOF,
+                                    start: possible_var.end,
+                                    end: possible_var.end,
+                                });
                             };
                             if !matches!(
-                                tokens.next(),
-                                Some(Spanned {
+                                in_token,
+                                Spanned {
                                     contents: Token::In,
                                     ..
-                                })
+                                }
                             ) {
-                                todo!()
+                                return Err(ParsingError {
+                                    err_type: ParsingErrorType::ExpectedToken(
+                                        Token::In,
+                                        in_token.contents,
+                                    ),
+                                    start: in_token.start,
+                                    end: in_token.end,
+                                });
                             }
                             let variable_value_options =
                                 parse_expression(tokens, &[Token::Semicolon])?;

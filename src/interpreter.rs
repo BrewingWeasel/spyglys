@@ -189,6 +189,9 @@ in test `{}`:
             CompileTimeErrorType::IncorrectTestType(val, val_type) => {
                 write!(f, "incorrect type: value {val} (type: {val_type:?})",)
             }
+            CompileTimeErrorType::ExpectedIterator(val) => {
+                write!(f, "expected an iterator but found {val}",)
+            }
         }
     }
 }
@@ -199,6 +202,7 @@ pub enum CompileTimeErrorType {
     RuntimeErrorInTest(RuntimeError),
     IncorrectTestType(Value, Type),
     TypeError(TypeErrorType),
+    ExpectedIterator(Value),
 }
 
 macro_rules! compile_time_error {
@@ -430,12 +434,17 @@ impl Interpreter {
                     self.run_individual_test(func, test, matcher, handler, None)?;
                 } else {
                     for (var, iterator_expr_for_values) in &test.for_vars {
-                        let Value::Iterator(all_variable_expressions) = try_or_compile_time_error!(
+                        let iterator_val = try_or_compile_time_error!(
                             self.eval(iterator_expr_for_values, None),
                             func,
                             test
-                        ) else {
-                            todo!()
+                        );
+                        let Value::Iterator(all_variable_expressions) = iterator_val else {
+                            return Err(compile_time_error!(
+                                CompileTimeErrorType::ExpectedIterator(iterator_val),
+                                func,
+                                test
+                            ));
                         };
                         for specific_variable_expression in all_variable_expressions {
                             let test_scope = Some(vec![Scope {
