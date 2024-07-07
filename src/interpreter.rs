@@ -81,9 +81,18 @@ pub enum Type {
     Iterator(Option<Box<Type>>),
 }
 
+pub struct BuiltinFunction {
+    handler: Box<
+        dyn (Fn(&mut dyn Iterator<Item = Result<Value, RuntimeError>>) -> Result<Value, RuntimeError>)
+            + Sync,
+    >,
+    num_args: usize,
+}
+
 #[derive(Default)]
 pub struct Interpreter {
     scope: Scope,
+    builtins: HashMap<String, BuiltinFunction>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -311,68 +320,23 @@ impl Interpreter {
             }
             Expression::Builtin(func, exprs) => {
                 let mut values = exprs.iter().map(|expr| self.eval(expr, additional));
-                match func.as_str() {
-                    "if_else" => {
-                        if exprs.len() != 3 {
-                            Err(RuntimeError {
-                                when_evaluating: expr.clone(),
-                                error_type: RuntimeErrorType::WrongNumberOfArgs(values.len(), 3),
-                            })
-                        } else if values
-                            .next()
-                            .expect("values count has already been determined")?
-                            != Value::Empty
-                        {
-                            values
-                                .next()
-                                .expect("values count has already been determined")
-                        } else {
-                            values.next();
-                            values
-                                .next()
-                                .expect("values count has already been determined")
-                        }
+                if let Some(func_details) = self.builtins.get(func) {
+                    if exprs.len() != func_details.num_args {
+                        Err(RuntimeError {
+                            when_evaluating: expr.clone(),
+                            error_type: RuntimeErrorType::WrongNumberOfArgs(
+                                values.len(),
+                                func_details.num_args,
+                            ),
+                        })
+                    } else {
+                        (func_details.handler)(&mut values)
                     }
-                    "map" => {
-                        if exprs.len() != 2 {
-                            Err(RuntimeError {
-                                when_evaluating: expr.clone(),
-                                error_type: RuntimeErrorType::WrongNumberOfArgs(values.len(), 2),
-                            })
-                        } else if values
-                            .next()
-                            .expect("values count has already been determined")?
-                            != Value::Empty
-                        {
-                            values
-                                .next()
-                                .expect("values count has already been determined")
-                        } else {
-                            Ok(Value::Empty)
-                        }
-                    }
-                    "unwrap_empty" => {
-                        if exprs.len() != 2 {
-                            return Err(RuntimeError {
-                                when_evaluating: expr.clone(),
-                                error_type: RuntimeErrorType::WrongNumberOfArgs(values.len(), 2),
-                            });
-                        }
-                        let initial = values
-                            .next()
-                            .expect("values count has already been determined")?;
-                        if initial != Value::Empty {
-                            values
-                                .next()
-                                .expect("values count has already been determined")
-                        } else {
-                            Ok(initial)
-                        }
-                    }
-                    v => Err(RuntimeError {
+                } else {
+                    Err(RuntimeError {
                         when_evaluating: expr.clone(),
-                        error_type: RuntimeErrorType::NonExistentBuiltin(v.to_owned()),
-                    }),
+                        error_type: RuntimeErrorType::NonExistentBuiltin(func.to_owned()),
+                    })
                 }
             }
         }
@@ -381,6 +345,73 @@ impl Interpreter {
     pub fn new() -> Self {
         Self {
             scope: Default::default(),
+            builtins: HashMap::from([
+                (
+                    String::from("if_else"),
+                    BuiltinFunction {
+                        handler: Box::new(
+                            |values: &mut dyn Iterator<Item = Result<Value, RuntimeError>>| {
+                                if values
+                                    .next()
+                                    .expect("values count has already been determined")?
+                                    != Value::Empty
+                                {
+                                    values
+                                        .next()
+                                        .expect("values count has already been determined")
+                                } else {
+                                    values.next();
+                                    values
+                                        .next()
+                                        .expect("values count has already been determined")
+                                }
+                            },
+                        ) as _,
+                        num_args: 3,
+                    },
+                ),
+                (
+                    String::from("map"),
+                    BuiltinFunction {
+                        handler: Box::new(
+                            |values: &mut dyn Iterator<Item = Result<Value, RuntimeError>>| {
+                                if values
+                                    .next()
+                                    .expect("values count has already been determined")?
+                                    != Value::Empty
+                                {
+                                    values
+                                        .next()
+                                        .expect("values count has already been determined")
+                                } else {
+                                    Ok(Value::Empty)
+                                }
+                            },
+                        ) as _,
+                        num_args: 2,
+                    },
+                ),
+                (
+                    String::from("unwrap_empty"),
+                    BuiltinFunction {
+                        handler: Box::new(
+                            |values: &mut dyn Iterator<Item = Result<Value, RuntimeError>>| {
+                                let initial = values
+                                    .next()
+                                    .expect("values count has already been determined")?;
+                                if initial != Value::Empty {
+                                    values
+                                        .next()
+                                        .expect("values count has already been determined")
+                                } else {
+                                    Ok(initial)
+                                }
+                            },
+                        ) as _,
+                        num_args: 2,
+                    },
+                ),
+            ]),
         }
     }
 
@@ -620,7 +651,7 @@ mod test {
 
     #[test]
     fn test_if_else_true_from_expression() {
-        let interpreter: Interpreter = Default::default();
+        let interpreter = Interpreter::new();
         let v = interpreter.eval(
             &Expression::Builtin(
                 "if_else".to_owned(),
@@ -637,7 +668,7 @@ mod test {
 
     #[test]
     fn test_if_else_false_from_expression() {
-        let interpreter: Interpreter = Default::default();
+        let interpreter = Interpreter::new();
         let v = interpreter.eval(
             &Expression::Builtin(
                 "if_else".to_owned(),
@@ -654,7 +685,7 @@ mod test {
 
     #[test]
     fn test_run_function_from_expression() {
-        let interpreter: Interpreter = Default::default();
+        let interpreter = Interpreter::new();
         let v = interpreter.eval_function(
             &Expression::Plus(
                 Box::new(Expression::Regex("^per(?<reflexive>si)".to_owned())),
