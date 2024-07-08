@@ -1,0 +1,3 @@
+def is_animal ($re:only($re:any(['(c|r|b)at', "dog", "snake"]))):
+    "I love animals!"
+end
