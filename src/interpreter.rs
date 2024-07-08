@@ -83,7 +83,10 @@ pub enum Type {
 
 pub struct BuiltinFunction {
     handler: Box<
-        dyn (Fn(&mut dyn Iterator<Item = Result<Value, RuntimeError>>) -> Result<Value, RuntimeError>)
+        dyn (Fn(
+                &mut dyn Iterator<Item = Result<Value, RuntimeError>>,
+                &Interpreter,
+            ) -> Result<Value, RuntimeError>)
             + Sync,
     >,
     num_args: usize,
@@ -330,7 +333,7 @@ impl Interpreter {
                             ),
                         })
                     } else {
-                        (func_details.handler)(&mut values)
+                        (func_details.handler)(&mut values, self)
                     }
                 } else {
                     Err(RuntimeError {
@@ -350,7 +353,8 @@ impl Interpreter {
                     String::from("if_else"),
                     BuiltinFunction {
                         handler: Box::new(
-                            |values: &mut dyn Iterator<Item = Result<Value, RuntimeError>>| {
+                            |values: &mut dyn Iterator<Item = Result<Value, RuntimeError>>,
+                             _: &Interpreter| {
                                 if values
                                     .next()
                                     .expect("values count has already been determined")?
@@ -374,7 +378,8 @@ impl Interpreter {
                     String::from("map"),
                     BuiltinFunction {
                         handler: Box::new(
-                            |values: &mut dyn Iterator<Item = Result<Value, RuntimeError>>| {
+                            |values: &mut dyn Iterator<Item = Result<Value, RuntimeError>>,
+                             _: &Interpreter| {
                                 if values
                                     .next()
                                     .expect("values count has already been determined")?
@@ -395,7 +400,8 @@ impl Interpreter {
                     String::from("unwrap_empty"),
                     BuiltinFunction {
                         handler: Box::new(
-                            |values: &mut dyn Iterator<Item = Result<Value, RuntimeError>>| {
+                            |values: &mut dyn Iterator<Item = Result<Value, RuntimeError>>,
+                             _: &Interpreter| {
                                 let initial = values
                                     .next()
                                     .expect("values count has already been determined")?;
@@ -409,6 +415,56 @@ impl Interpreter {
                             },
                         ) as _,
                         num_args: 2,
+                    },
+                ),
+                (
+                    String::from("re:any"),
+                    BuiltinFunction {
+                        handler: Box::new(
+                            |values: &mut dyn Iterator<Item = Result<Value, RuntimeError>>,
+                             interpreter: &Interpreter| {
+                                let input = values
+                                    .next()
+                                    .expect("values count has already been determined")?;
+                                let Value::Iterator(values_inside) = input else {
+                                    return Err(RuntimeError {
+                                        when_evaluating: Expression::Empty,
+                                        error_type: RuntimeErrorType::TypeError(
+                                            TypeErrorType::ExpectedType(
+                                                Type::Iterator(None),
+                                                input,
+                                                Type::Empty,
+                                            ),
+                                        ),
+                                    });
+                                };
+                                Ok(Value::Regex(
+                                    values_inside
+                                        .iter()
+                                        .map(|expr| {
+                                            let value = interpreter.eval(expr, None)?;
+                                            match value {
+                                                Value::Regex(r) => Ok(r),
+                                                Value::Str(s) => Ok(s),
+                                                v => Err(RuntimeError {
+                                                    when_evaluating: Expression::Empty, // TODO: figure
+                                                    // out how to do this better
+                                                    error_type: RuntimeErrorType::TypeError(
+                                                        TypeErrorType::ExpectedType(
+                                                            Type::Regex,
+                                                            v,
+                                                            Type::Str,
+                                                        ),
+                                                    ),
+                                                }),
+                                            }
+                                        })
+                                        .collect::<Result<Vec<String>, RuntimeError>>()?
+                                        .join("|"),
+                                ))
+                            },
+                        ) as _,
+                        num_args: 1,
                     },
                 ),
             ]),

@@ -209,7 +209,7 @@ impl<'input> Iterator for Lexer<'input> {
                     if c.is_whitespace() {
                         break;
                     }
-                    if !c.is_alphanumeric() && c != '_' && c != '?' {
+                    if !c.is_alphanumeric() && c != '_' && c != '?' && c != ':' {
                         self.errors.push(LexingError {
                             err_type: LexingErrorType::UnexpectedChar(c),
                             position: self.position + 1,
