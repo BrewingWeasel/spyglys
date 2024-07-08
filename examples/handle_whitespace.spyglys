@@ -10,9 +10,9 @@ where
     "   space inside  " -> "space inside";
     "" -> ();
     "     " -> ();
-    ws + "inner" + ws -> "inner" for ws in ["  ", " ", "",];
-    " " + ending -> ending for ending in ["e", ";", "ending",];
-    starting + "   " -> starting for starting in ["s", ";", "starting",];
+    ws + "inner" + ws -> "inner" for ws in ["  ", " ", ""];
+    " " + ending -> ending for ending in ["e", ";", "ending"];
+    starting + "   " -> starting for starting in ["s", ";", "starting"];
 end
 
 def trim_left ('^' + whitespace + main_anything):
@@ -20,7 +20,7 @@ def trim_left ('^' + whitespace + main_anything):
 where
     whitespace + "inner" + whitespace ->
         "inner" + whitespace
-        for whitespace in ["  ", " ", "",];
+        for whitespace in ["  ", " ", ""];
 end
 
 def trim_right (main_right + whitespace + '$'):
@@ -28,5 +28,5 @@ def trim_right (main_right + whitespace + '$'):
 where
     whitespace + "inner" + whitespace ->
         whitespace + "inner"
-        for whitespace in ["  ", " ", "",];
+        for whitespace in ["  ", " ", ""];
 end
