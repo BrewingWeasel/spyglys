@@ -418,6 +418,41 @@ impl Interpreter {
                     },
                 ),
                 (
+                    String::from("re:only"),
+                    BuiltinFunction {
+                        handler: Box::new(
+                            |values: &mut dyn Iterator<Item = Result<Value, RuntimeError>>,
+                             interpreter: &Interpreter| {
+                                let value = values
+                                    .next()
+                                    .expect("values count has already been determined")?;
+                                match value {
+                                    Value::Str(s) => Ok(Value::Regex(format!("^({s})$"))),
+                                    Value::Regex(r) => Ok(Value::Regex(format!("^({r})$"))),
+                                    _ => Err(RuntimeError {
+                                        when_evaluating: Expression::Empty,
+                                        error_type: RuntimeErrorType::TypeError(
+                                            TypeErrorType::ExpectedType(
+                                                // TODO: multiple expected
+                                                // types
+                                                Type::Str,
+                                                value.clone(),
+                                                interpreter.value_to_type(&value).map_err(|v| {
+                                                    RuntimeError {
+                                                        when_evaluating: Expression::Empty,
+                                                        error_type: RuntimeErrorType::TypeError(v),
+                                                    }
+                                                })?,
+                                            ),
+                                        ),
+                                    }),
+                                }
+                            },
+                        ) as _,
+                        num_args: 1,
+                    },
+                ),
+                (
                     String::from("re:any"),
                     BuiltinFunction {
                         handler: Box::new(
