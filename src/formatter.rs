@@ -19,10 +19,11 @@ impl Expression {
             Self::Builtin(func, args) => RcDoc::as_string(format!("${func}("))
                 .append(
                     RcDoc::intersperse(
-                        args.iter().map(|x| x.to_doc().append(RcDoc::text(","))),
-                        RcDoc::line(),
+                        args.iter().map(|x| x.to_doc()),
+                        RcDoc::text(",").append(RcDoc::line()),
                     )
-                    .append(RcDoc::line())
+                    .append(RcDoc::text(",").flat_alt(RcDoc::nil()))
+                    .append(RcDoc::line_())
                     .nest(INDENT_SIZE)
                     .group(),
                 )
@@ -34,12 +35,17 @@ impl Expression {
                 .append(RcDoc::line().append(expr2.to_doc()).group()),
             Self::Empty => RcDoc::text("()"),
             Self::Iterator(v) => RcDoc::text("[")
-                .append(RcDoc::intersperse(
-                    v.iter().map(|v| v.to_doc().append(RcDoc::text(","))),
-                    RcDoc::line(),
-                ))
-                .append(RcDoc::text("]"))
-                .group(),
+                .append(
+                    RcDoc::intersperse(
+                        v.iter().map(|v| v.to_doc()),
+                        RcDoc::text(",").append(RcDoc::line()),
+                    )
+                    .append(RcDoc::text(",").flat_alt(RcDoc::nil()))
+                    .append(RcDoc::line_())
+                    .nest(INDENT_SIZE)
+                    .group(),
+                )
+                .append(RcDoc::text("]")),
         }
     }
 }
