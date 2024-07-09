@@ -506,6 +506,10 @@ impl Interpreter {
         }
     }
 
+    pub fn add_builtin(&mut self, name: String, func: BuiltinFunction) {
+        self.builtins.insert(name, func);
+    }
+
     pub fn expression_to_type(&self, expr: &Expression) -> Result<Type, TypeErrorType> {
         match expr {
             Expression::Empty => Ok(Type::Empty),
