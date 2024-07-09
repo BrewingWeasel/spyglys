@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, error::Error, fmt::Display};
 
 use regex::Regex;
 
@@ -146,6 +146,8 @@ pub struct RuntimeError {
     pub error_type: RuntimeErrorType,
 }
 
+impl Error for RuntimeError {}
+
 impl Display for RuntimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut expr = Vec::new();
@@ -207,6 +209,8 @@ in test `{}`:
         }
     }
 }
+
+impl Error for CompileTimeError {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompileTimeErrorType {

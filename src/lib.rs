@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{error::Error, fmt::Display};
 
 use interpreter::{CompileTimeError, Interpreter, RuntimeError, Statement, Value};
 use parser::{Lexer, LexingError, LexingErrorType, ParsingError, ParsingErrorType, Token};
@@ -7,12 +7,15 @@ pub mod formatter;
 pub mod interpreter;
 pub mod parser;
 
+#[derive(Clone, Debug)]
 pub enum SpyglysError {
     Lexing(LexingError),
     Parsing(ParsingError),
     Runtime(RuntimeError),
     CompileTime(CompileTimeError),
 }
+
+impl Error for SpyglysError {}
 
 impl Display for SpyglysError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
