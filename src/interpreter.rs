@@ -379,7 +379,7 @@ impl Interpreter {
                     },
                 ),
                 (
-                    String::from("map"),
+                    String::from("replace_some"),
                     BuiltinFunction {
                         handler: Box::new(
                             |values: &mut dyn Iterator<Item = Result<Value, RuntimeError>>,
@@ -401,7 +401,7 @@ impl Interpreter {
                     },
                 ),
                 (
-                    String::from("unwrap_empty"),
+                    String::from("replace_empty"),
                     BuiltinFunction {
                         handler: Box::new(
                             |values: &mut dyn Iterator<Item = Result<Value, RuntimeError>>,
