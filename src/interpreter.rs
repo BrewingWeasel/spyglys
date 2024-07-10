@@ -379,6 +379,57 @@ impl Interpreter {
                     },
                 ),
                 (
+                    String::from("map"),
+                    BuiltinFunction {
+                        handler: Box::new(
+                            |values: &mut dyn Iterator<Item = Result<Value, RuntimeError>>,
+                             interpreter: &Interpreter| {
+                                let value = values
+                                    .next()
+                                    .expect("values count has already been determined")?;
+
+                                match value {
+                                    Value::Empty => Ok(Value::Empty),
+                                    Value::Str(argument) => {
+                                        let func_to_call = values
+                                            .next()
+                                            .expect("values count has already been determined")?;
+                                        let Value::Str(name) = func_to_call else {
+                                            return Err(RuntimeError {
+                                                when_evaluating: Expression::Empty,
+                                                error_type: RuntimeErrorType::TypeError(
+                                                    TypeErrorType::ExpectedType(
+                                                        Type::Str,
+                                                        func_to_call.clone(),
+                                                        Type::Empty,
+                                                    ),
+                                                ),
+                                            });
+                                        };
+                                        interpreter.run_function(&name, &argument)
+                                    }
+                                    _ => Err(RuntimeError {
+                                        when_evaluating: Expression::Empty,
+                                        error_type: RuntimeErrorType::TypeError(
+                                            TypeErrorType::ExpectedType(
+                                                Type::Str,
+                                                value.clone(),
+                                                interpreter.value_to_type(&value).map_err(|v| {
+                                                    RuntimeError {
+                                                        when_evaluating: Expression::Empty,
+                                                        error_type: RuntimeErrorType::TypeError(v),
+                                                    }
+                                                })?,
+                                            ),
+                                        ),
+                                    }),
+                                }
+                            },
+                        ) as _,
+                        num_args: 2,
+                    },
+                ),
+                (
                     String::from("replace_some"),
                     BuiltinFunction {
                         handler: Box::new(
