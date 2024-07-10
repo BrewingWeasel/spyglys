@@ -811,7 +811,8 @@ impl Interpreter {
         let Some(captures) = re.captures(input) else {
             return Ok(Value::Empty);
         };
-        let mut variables = HashMap::new();
+        let mut variables =
+            HashMap::from([(String::from("matched"), Value::Str(input.to_owned()))]);
         for name in re.capture_names() {
             let Some(var_name) = name else {
                 continue;
