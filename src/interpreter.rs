@@ -457,6 +457,64 @@ impl Interpreter {
                     },
                 ),
                 (
+                    String::from("re:named"),
+                    BuiltinFunction {
+                        handler: Box::new(
+                            |values: &mut dyn Iterator<Item = Result<Value, RuntimeError>>,
+                             interpreter: &Interpreter| {
+                                let value = values
+                                    .next()
+                                    .expect("values count has already been determined")?;
+                                let Value::Regex(regex_value) = value else {
+                                    return Err(RuntimeError {
+                                        when_evaluating: Expression::Empty,
+                                        error_type: RuntimeErrorType::TypeError(
+                                            TypeErrorType::ExpectedType(
+                                                // TODO: multiple expected
+                                                // types
+                                                Type::Str,
+                                                value.clone(),
+                                                interpreter.value_to_type(&value).map_err(|v| {
+                                                    RuntimeError {
+                                                        when_evaluating: Expression::Empty,
+                                                        error_type: RuntimeErrorType::TypeError(v),
+                                                    }
+                                                })?,
+                                            ),
+                                        ),
+                                    });
+                                };
+                                let name = values
+                                    .next()
+                                    .expect("values count has already been determined")?;
+                                match name {
+                                    Value::Str(name) => {
+                                        Ok(Value::Regex(format!("(?<{name}>{regex_value})")))
+                                    }
+                                    _ => Err(RuntimeError {
+                                        when_evaluating: Expression::Empty,
+                                        error_type: RuntimeErrorType::TypeError(
+                                            TypeErrorType::ExpectedType(
+                                                // TODO: multiple expected
+                                                // types
+                                                Type::Str,
+                                                name.clone(),
+                                                interpreter.value_to_type(&name).map_err(|v| {
+                                                    RuntimeError {
+                                                        when_evaluating: Expression::Empty,
+                                                        error_type: RuntimeErrorType::TypeError(v),
+                                                    }
+                                                })?,
+                                            ),
+                                        ),
+                                    }),
+                                }
+                            },
+                        ) as _,
+                        num_args: 2,
+                    },
+                ),
+                (
                     String::from("re:any"),
                     BuiltinFunction {
                         handler: Box::new(
