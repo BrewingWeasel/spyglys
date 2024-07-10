@@ -525,6 +525,10 @@ fn parse_partial_expression(
             Token::LBracket => {
                 let mut contents = Vec::new();
                 while let Some(t) = tokens.peek() {
+                    if t.contents == Token::NewLine {
+                        tokens.next();
+                        continue;
+                    }
                     if t.contents == Token::RBracket {
                         tokens.next();
                         break;

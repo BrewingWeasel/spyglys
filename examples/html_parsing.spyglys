@@ -1,6 +1,6 @@
 def recursive_example (
     '<(?<tag>\w+)>(?<inner>(?<inner_html><.+)|.+)?</(?<secondtag>\w+)>'
 ):
-    "(" + tag + $map(inner, " ") +
-    $map(inner, $if_else(inner_html, recursive_example( inner), inner)) + ")"
+    "(" + tag + $replace_some(inner, " ") +
+    $replace_some(inner, $if_else(inner_html, recursive_example( inner), inner)) + ")"
 end
