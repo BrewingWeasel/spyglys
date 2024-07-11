@@ -833,7 +833,7 @@ impl Interpreter {
             }]),
         )?;
 
-        if let Value::Str(_) = handled {
+        if let Value::Str(_) | Value::Empty = handled {
             Ok(handled)
         } else {
             let handled_type = self
