@@ -31,5 +31,5 @@ def unreflexify (root_verb_form + 's$'):
 end
 
 def root_verb ($re:only(verb_prefix + root_verb_form)):
-    $map(remove_verb_prefix(matched), "unreflexify")
+    $try_map(remove_verb_prefix(matched), "unreflexify")
 end
