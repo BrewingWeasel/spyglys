@@ -677,6 +677,10 @@ impl Interpreter {
         self.builtins.insert(name, func);
     }
 
+    pub fn get_functions(&self) -> Vec<String> {
+        self.scope.functions.keys().cloned().collect()
+    }
+
     pub fn expression_to_type(&self, expr: &Expression) -> Result<Type, TypeErrorType> {
         match expr {
             Expression::Empty => Ok(Type::Empty),
