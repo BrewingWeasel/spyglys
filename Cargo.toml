@@ -18,8 +18,13 @@ regex = "1.10.5"
 binary = ["reedline", "clap"]
 
 [dev-dependencies]
+criterion = "0.5.1"
 insta = "1.39.0"
 
 [[bin]]
 name = "spyglys"
 required-features = ["binary"]
+
+[[bench]]
+name = "lithuanian_verb_simplification"
+harness = false
