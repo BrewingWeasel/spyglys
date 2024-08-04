@@ -1,5 +1,6 @@
 use std::{collections::HashMap, error::Error, fmt::Display};
 
+use dashmap::DashMap;
 use regex::Regex;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,6 +97,7 @@ pub struct BuiltinFunction {
 pub struct Interpreter {
     scope: Scope,
     builtins: HashMap<String, BuiltinFunction>,
+    regex_cache: DashMap<String, Result<Regex, RuntimeError>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -356,6 +358,7 @@ impl Interpreter {
     pub fn new() -> Self {
         Self {
             scope: Default::default(),
+            regex_cache: Default::default(),
             builtins: HashMap::from([
                 (
                     String::from("if_else"),
@@ -869,10 +872,20 @@ impl Interpreter {
             });
         };
 
-        let re = Regex::new(&regex_matching).map_err(|e| RuntimeError {
-            when_evaluating: matcher.to_owned(),
-            error_type: RuntimeErrorType::RegexError(e),
-        })?;
+        let cached_regex = self
+            .regex_cache
+            .entry(regex_matching.clone())
+            .or_insert_with(|| {
+                Regex::new(&regex_matching).map_err(|e| RuntimeError {
+                    when_evaluating: matcher.to_owned(),
+                    error_type: RuntimeErrorType::RegexError(e),
+                })
+            });
+
+        let re = match cached_regex.value() {
+            Ok(r) => r,
+            Err(e) => return Err(e.clone()),
+        };
         let Some(captures) = re.captures(input) else {
             return Ok(Value::Empty);
         };
@@ -889,6 +902,7 @@ impl Interpreter {
                     .map_or(Value::Empty, |v| Value::Str(v.as_str().to_string())),
             );
         }
+        drop(cached_regex);
 
         let handled = self.eval(
             handler,
@@ -921,7 +935,7 @@ impl Interpreter {
 
 #[cfg(test)]
 mod test {
-    use crate::interpreter::*;
+    use crate::{contents_to_interpreter, interpreter::*};
 
     #[test]
     fn test_if_else_true_from_expression() {
@@ -982,5 +996,29 @@ mod test {
             "persikelti",
         );
         assert_eq!(v, Ok(Value::Str("keltis".to_owned())));
+    }
+
+    #[test]
+    fn test_cached_regex() {
+        let interpreter = contents_to_interpreter(
+            "
+def transform_word ('^h' + $re:named('v+', \"main\") + 'ending$'):
+    main
+end
+",
+        )
+        .unwrap();
+        assert_eq!(
+            interpreter.run_function("transform_word", "hvvvvending"),
+            Ok(Value::Str("vvvv".to_owned()))
+        );
+        assert_eq!(
+            interpreter.run_function("transform_word", "hvvending"),
+            Ok(Value::Str("vv".to_owned()))
+        );
+        assert_eq!(
+            interpreter.run_function("transform_word", "hvvvvending"),
+            Ok(Value::Str("vvvv".to_owned()))
+        );
     }
 }
