@@ -131,16 +131,17 @@ impl Display for TypeErrorType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RuntimeErrorType {
     TypeError(TypeErrorType),
     NonExistentVariable(String),
     WrongNumberOfArgs(usize, usize),
     NonExistentBuiltin(String),
     NonExistentFunction(String),
+    RegexError(regex::Error),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RuntimeError {
     pub when_evaluating: Expression,
     pub error_type: RuntimeErrorType,
@@ -174,11 +175,14 @@ impl Display for RuntimeError {
             RuntimeErrorType::NonExistentVariable(variable) => {
                 write!(f, "Variable {variable} does not exist")
             }
+            RuntimeErrorType::RegexError(e) => {
+                write!(f, "Invalid regex: {e}")
+            }
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CompileTimeError {
     pub in_function: String,
     pub in_test: String,
@@ -212,7 +216,7 @@ in test `{}`:
 
 impl Error for CompileTimeError {}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CompileTimeErrorType {
     TestFailed(Value, Value),
     RuntimeErrorInTest(RuntimeError),
@@ -865,7 +869,10 @@ impl Interpreter {
             });
         };
 
-        let re = Regex::new(&regex_matching).unwrap();
+        let re = Regex::new(&regex_matching).map_err(|e| RuntimeError {
+            when_evaluating: matcher.to_owned(),
+            error_type: RuntimeErrorType::RegexError(e),
+        })?;
         let Some(captures) = re.captures(input) else {
             return Ok(Value::Empty);
         };
