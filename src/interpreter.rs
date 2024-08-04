@@ -1021,4 +1021,32 @@ end
             Ok(Value::Str("vvvv".to_owned()))
         );
     }
+
+    #[test]
+    fn test_cached_regex_complicated() {
+        let interpreter = contents_to_interpreter(
+            "
+def transform_vs ('^v' + $re:named('v*', \"inner\") + 'v$'):
+    inner + \"other inner\"
+end
+
+def transform_word ('^h' + $re:named('v+', \"main\") + 'ending$'):
+    transform_vs(main)
+end
+",
+        )
+        .unwrap();
+        assert_eq!(
+            interpreter.run_function("transform_word", "hvvvvending"),
+            Ok(Value::Str("vvother inner".to_owned()))
+        );
+        assert_eq!(
+            interpreter.run_function("transform_word", "hvvending"),
+            Ok(Value::Str("other inner".to_owned()))
+        );
+        assert_eq!(
+            interpreter.run_function("transform_word", "hvvvvending"),
+            Ok(Value::Str("vvother inner".to_owned()))
+        );
+    }
 }
